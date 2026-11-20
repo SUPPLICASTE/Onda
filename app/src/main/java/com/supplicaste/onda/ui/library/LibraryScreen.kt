@@ -1,11 +1,13 @@
 package com.supplicaste.onda.ui.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,12 +43,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.supplicaste.onda.ui.OndaUiState
 import com.supplicaste.onda.ui.OndaViewModel
 import com.supplicaste.onda.ui.theme.OndaAccent
+import com.supplicaste.onda.ui.theme.OndaAccentDim
 import com.supplicaste.onda.ui.theme.OndaSurface
 
 private enum class LibraryFilter(val label: String) {
@@ -110,25 +117,29 @@ fun LibraryScreen(
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.weight(1f).padding(top = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 12.dp)
         ) {
             if (filter == LibraryFilter.Todo || filter == LibraryFilter.Liked) {
                 item(span = { GridItemSpan(2) }) {
                     Card(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
                         onClick = onOpenLiked,
-                        colors = CardDefaults.cardColors(containerColor = OndaAccent)
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().height(90.dp).padding(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(92.dp)
+                                .background(Brush.linearGradient(listOf(OndaAccent, OndaAccentDim)))
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 Icons.Filled.Favorite,
                                 contentDescription = null,
-                                tint = androidx.compose.ui.graphics.Color.Black,
+                                tint = Color.Black,
                                 modifier = Modifier.size(42.dp)
                             )
                             Spacer(Modifier.width(14.dp))
@@ -136,12 +147,12 @@ fun LibraryScreen(
                                 Text(
                                     "Me gusta",
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = androidx.compose.ui.graphics.Color.Black
+                                    color = Color.Black
                                 )
                                 Text(
                                     "${state.stats.liked} canciones guardadas",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.75f)
+                                    color = Color.Black.copy(alpha = 0.75f)
                                 )
                             }
                         }
@@ -152,7 +163,9 @@ fun LibraryScreen(
             if (filter == LibraryFilter.Todo || filter == LibraryFilter.Playlists) {
                 items(playlists, key = { "p${it.id}" }) { playlist ->
                     CollectionTile(
-                        icon = Icons.Filled.QueueMusic,
+                        vm = vm,
+                        collectionId = playlist.id,
+                        isAlbum = false,
                         name = playlist.name,
                         subtitle = "Playlist",
                         onClick = { onOpenPlaylist(playlist.id, playlist.name) }
@@ -163,7 +176,9 @@ fun LibraryScreen(
             if (filter == LibraryFilter.Todo || filter == LibraryFilter.Albums) {
                 items(albums, key = { "a${it.id}" }) { album ->
                     CollectionTile(
-                        icon = Icons.Filled.Album,
+                        vm = vm,
+                        collectionId = album.id,
+                        isAlbum = true,
                         name = album.name,
                         subtitle = "Álbum",
                         onClick = { onOpenAlbum(album.id, album.name) }
@@ -176,26 +191,53 @@ fun LibraryScreen(
 
 @Composable
 private fun CollectionTile(
-    icon: ImageVector,
+    vm: OndaViewModel,
+    collectionId: Long,
+    isAlbum: Boolean,
     name: String,
     subtitle: String,
     onClick: () -> Unit
 ) {
+    val songs by (if (isAlbum) vm.songsOfAlbum(collectionId) else vm.songsOfPlaylist(collectionId))
+        .collectAsState(initial = emptyList())
+    val cover = songs.firstOrNull()?.artwork.orEmpty()
+
     Card(
-        modifier = Modifier.fillMaxWidth().height(140.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = OndaSurface)
     ) {
-        Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Icon(icon, contentDescription = null, tint = OndaAccent, modifier = Modifier.size(34.dp))
-            Column {
-                Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = cover.ifBlank { null },
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (cover.isBlank()) {
+                Icon(
+                    if (isAlbum) Icons.Filled.Album else Icons.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = OndaAccent,
+                    modifier = Modifier.size(48.dp)
                 )
             }
+        }
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 10.dp)) {
+            Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

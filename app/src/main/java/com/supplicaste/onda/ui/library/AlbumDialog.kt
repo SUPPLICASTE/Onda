@@ -89,7 +89,7 @@ fun CollectionDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { vm.shareList(name, songs) }) { Text("Compartir QR") }
+            Button(onClick = { vm.shareList(name, songs) }) { Text("Compartir") }
         },
         dismissButton = {
             Row {

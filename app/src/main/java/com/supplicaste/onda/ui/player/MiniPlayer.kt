@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.supplicaste.onda.ui.OndaUiState
 import com.supplicaste.onda.ui.OndaViewModel
 import com.supplicaste.onda.ui.components.Artwork
+import com.supplicaste.onda.ui.components.SongMoreButton
 import com.supplicaste.onda.ui.theme.OndaAccent
 
 @Composable
@@ -100,6 +101,7 @@ fun MiniPlayer(
 
                 if (song != null) {
                     val liked = song.id in state.likedIds
+                    SongMoreButton(song = song, liked = liked, vm = vm)
                     IconButton(onClick = { vm.toggleLike(song) }) {
                         Icon(
                             if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,

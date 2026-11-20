@@ -1,5 +1,10 @@
 package com.supplicaste.onda.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,9 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -214,27 +222,62 @@ fun OndaApp(vm: OndaViewModel = viewModel()) {
             )
         }
 
-        state.qr?.let { bitmap ->
+        state.shareCode?.let { code ->
+            val context = LocalContext.current
             AlertDialog(
                 onDismissRequest = { vm.clearQr() },
-                title = { Text("Compartir") },
+                title = { Text("Compartir álbum o playlist") },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Surface(shape = RoundedCornerShape(8.dp)) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = "QR del álbum o playlist",
-                                modifier = Modifier.size(220.dp)
+                        state.qr?.let { bitmap ->
+                            Surface(shape = RoundedCornerShape(8.dp)) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "QR de la colección",
+                                    modifier = Modifier.size(200.dp)
+                                )
+                            }
+                            Text(
+                                "Tu amigo puede escanearlo desde Buscar → Escanear QR",
+                                style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        Text("Tu amigo puede escanearlo desde Buscar → Escanear QR")
+                        Text("O copia y envía este código:", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            value = code,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 3,
+                            trailingIcon = {
+                                IconButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Código Onda", code))
+                                    Toast.makeText(context, "Código copiado", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copiar código")
+                                }
+                            }
+                        )
                     }
                 },
-                confirmButton = { TextButton(onClick = { vm.clearQr() }) { Text("Cerrar") } }
+                confirmButton = {
+                    Button(onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, code)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Compartir código Onda"))
+                    }) {
+                        Icon(Icons.Filled.Share, contentDescription = null)
+                        Text("Compartir código", modifier = Modifier.padding(start = 6.dp))
+                    }
+                },
+                dismissButton = { TextButton(onClick = { vm.clearQr() }) { Text("Cerrar") } }
             )
         }
 

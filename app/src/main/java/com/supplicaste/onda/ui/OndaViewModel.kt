@@ -52,6 +52,7 @@ data class OndaUiState(
     val darkTheme: Boolean = true,
     val stats: OndaStats = OndaStats(0, 0, 0, 0),
     val qr: Bitmap? = null,
+    val shareCode: String? = null,
     val updateAvailable: String? = null
 )
 
@@ -161,7 +162,7 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearQr() {
-        _state.value = _state.value.copy(qr = null)
+        _state.value = _state.value.copy(qr = null, shareCode = null)
     }
 
     fun dismissUpdate() {
@@ -387,7 +388,8 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
         val bitmap = QrCodec.encode(payload)
         _state.value = _state.value.copy(
             qr = bitmap,
-            message = if (bitmap != null) "Muestra este QR a tu amigo" else "QR demasiado grande; usa el texto compartido"
+            shareCode = payload,
+            message = "Comparte el QR o copia el código"
         )
     }
 

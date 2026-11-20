@@ -59,6 +59,7 @@ import coil.compose.AsyncImage
 import com.supplicaste.onda.ui.OndaUiState
 import com.supplicaste.onda.ui.OndaViewModel
 import com.supplicaste.onda.ui.components.Artwork
+import com.supplicaste.onda.ui.components.SongMoreButton
 import com.supplicaste.onda.ui.theme.OndaAccent
 import kotlin.math.roundToLong
 
@@ -179,6 +180,7 @@ fun NowPlayingScreen(
                                     modifier = Modifier.size(30.dp)
                                 )
                             }
+                            SongMoreButton(song = song, liked = liked, vm = vm)
                         }
 
                         Spacer(Modifier.height(12.dp))
