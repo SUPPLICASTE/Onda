@@ -22,8 +22,8 @@ android {
         applicationId = "com.supplicaste.onda"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.0.1"
+        versionCode = 4
+        versionName = "1.1.0"
 
         buildConfigField("String", "FIREBASE_API_KEY", "\"${secret("onda.firebase.apiKey", "ONDA_FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${secret("onda.firebase.projectId", "ONDA_FIREBASE_PROJECT_ID")}\"")
@@ -100,6 +100,7 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
 
     implementation("com.github.teamnewpipe:NewPipeExtractor:v0.27.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

@@ -1,46 +1,37 @@
 package com.supplicaste.onda.player
 
+import android.content.ComponentName
 import android.content.Context
-import androidx.media3.common.MediaItem
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 
-private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Onda/1.0"
-
+/** Puente entre la UI y el servicio de reproducción. */
+@UnstableApi
 object OndaPlayer {
-    private var player: ExoPlayer? = null
+    private var controller: MediaController? = null
 
-    fun get(context: Context): ExoPlayer {
-        if (player == null) {
-            val httpFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent(USER_AGENT)
-                .setAllowCrossProtocolRedirects(true)
-            val dataSourceFactory = DefaultDataSource.Factory(context.applicationContext, httpFactory)
-            player = ExoPlayer.Builder(context.applicationContext)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-                .build()
+    fun connect(context: Context, onReady: () -> Unit) {
+        if (controller != null) {
+            onReady()
+            return
         }
-        return player!!
+        val token = SessionToken(context, ComponentName(context, OndaPlaybackService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener(
+            {
+                controller = runCatching { future.get() }.getOrNull()
+                onReady()
+            },
+            ContextCompat.getMainExecutor(context)
+        )
     }
 
-    fun play(context: Context, url: String) {
-        val p = get(context)
-        p.stop()
-        p.setMediaItem(MediaItem.fromUri(url))
-        p.prepare()
-        p.playWhenReady = true
-    }
+    fun get(): MediaController? = controller
 
-    fun isPlaying(): Boolean = player?.isPlaying == true
-
-    fun toggle() {
-        player?.let { if (it.isPlaying) it.pause() else it.play() }
-    }
-
-    fun release() {
-        player?.release()
-        player = null
+    fun disconnect() {
+        controller?.release()
+        controller = null
     }
 }

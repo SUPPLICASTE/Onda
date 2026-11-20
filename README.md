@@ -2,12 +2,11 @@
 
 > Tu música, sin ruido.
 
-**Onda** es una app de música para Android, inspirada en la interfaz de Spotify, sin anuncios. Permite buscar canciones, crear álbumes, compartirlos con amigos mediante QR, activar un DJ que sugiere la siguiente canción según lo que escuchas e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
+**Onda** es un reproductor de música para Android con interfaz oscura inspirada en los patrones habituales de los reproductores modernos, sin anuncios. Permite buscar canciones, marcar **Me gusta**, crear álbumes y playlists, compartirlos por QR, reproducir en segundo plano con controles multimedia, activar un DJ que sugiere la siguiente canción e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
 
 - **Paquete:** `com.supplicaste.onda`
-- **Versión:** 1.0.1 (`versionCode 3`)
-- **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM
-- **Distribución:** GitHub Releases (APK firmado)
+- **Versión:** 1.1.0 (`versionCode 4`)
+- **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM + Room + Media3 + NewPipeExtractor
 
 ---
 
@@ -15,16 +14,20 @@
 
 | Función | Estado | Detalle |
 |---|---|---|
-| Interfaz tipo Spotify | ✅ | Barra superior, navegación inferior (Inicio / Buscar / Biblioteca), mini-reproductor |
+| Interfaz tipo reproductor moderno | ✅ | Tema oscuro con acento verde, navegación inferior, tarjetas, mini-reproductor |
 | Sin anuncios | ✅ | Ningún SDK publicitario |
 | Registro con correo | ✅ | Firebase Auth si hay credenciales; modo local si no las hay |
-| Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube), resultados en tiempo real |
-| Reproducción | ✅ | Media3/ExoPlayer con streams de audio |
-| Álbumes | ✅ | Room: crear, añadir, quitar y borrar álbumes |
-| Compartir con amigos | ✅ | Código QR (ZXing) + campo para importar código o escanearlo |
-| DJ opcional | ✅ | Sugiere la siguiente canción según reproducciones y artistas guardados |
+| Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube), búsquedas recientes |
+| Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano y notificación multimedia |
+| **Me gusta** | ✅ | Botón en cada canción y playlist especial "Me gusta" |
+| **Pantalla de reproducción** | ✅ | Carátula, progreso, aleatorio, anterior/siguiente, repetir, cola editable |
+| Menú de cada canción | ✅ | Reproducir, reproducir siguiente, Me gusta, añadir a álbum o playlist |
+| Álbumes y playlists | ✅ | Crear, renombrar, borrar, añadir y quitar canciones |
+| Compartir con amigos | ✅ | Código QR (ZXing) + campo para importar o escanear |
+| DJ opcional | ✅ | Sugiere la siguiente canción según Me gusta, historial y artistas |
+| Perfil | ✅ | Correo, estadísticas, tema oscuro/claro, comprobación de updates |
 | Auto-actualizador | ✅ | Consulta `/releases/latest`, descarga el APK y lanza la instalación |
-| Persistencia al actualizar | ✅ | Mismo `applicationId` y misma clave de firma |
+| Persistencia al actualizar | ✅ | Mismo `applicationId` y misma clave de firma; migración Room v1→v2 |
 
 ---
 
@@ -32,22 +35,23 @@
 
 | Decisión | Elección | Motivo |
 |---|---|---|
-| Nombre | **Onda** | Propio y corto; evita conflictos de marca con Spotify |
-| Catálogo | NewPipeExtractor / YouTube | Grandes listas, sin descargar archivos |
-| Registro | Firebase Auth (correo) | Verificación real; con fallback local para poder compilar sin credenciales |
-| Compartir | QR / texto | Sin backend propio; el otro usuario importa el álbum |
-| DJ | Local, sin IA externa | Basado en historial y artistas favoritos |
-| Actualizaciones | Misma firma | Conserva la base de datos al sobrescribir la app |
+| Nombre | **Onda** | Propio; no usa nombre, logo ni recursos de Spotify |
+| Catálogo | NewPipeExtractor / YouTube | Grandes listas sin descargar archivos |
+| Registro | Firebase Auth + fallback local | Verificación real sin bloquear el build |
+| Compartir | QR / texto | Sin backend propio |
+| DJ | Local, sin IA externa | Basado en Me gusta e historial |
+| Reproductor | `MediaSessionService` | Música en segundo plano y controles en notificación |
+| Actualizaciones | Misma firma | Conserva Room (álbumes, Me gusta, listas e historial) al sobrescribir |
 
 ---
 
 ## Configuración de Firebase (opcional pero recomendada)
 
-La app compila y funciona sin credenciales, en **modo local**: el correo se guarda solo en SharedPreferences y no se verifica. Para activar el registro real:
+Sin credenciales la app funciona en **modo local**: el correo se guarda solo en SharedPreferences. Para activar el registro real:
 
 1. Crea un proyecto en Firebase y añade una app Android con paquete `com.supplicaste.onda`.
-2. Copia el `google-services.json` a `app/` (está en `.gitignore`; **no subirlo**).
-3. Añade a `local.properties` (también ignorado):
+2. Copia `google-services.json` a `app/` (ignorado por Git; **no subirlo**).
+3. Añade a `local.properties`:
 
 ```properties
 onda.firebase.apiKey=AIza...
@@ -55,15 +59,13 @@ onda.firebase.projectId=tu-proyecto
 onda.firebase.appId=1:123456789:android:abcdef
 ```
 
-También puedes usar las variables de entorno `ONDA_FIREBASE_API_KEY`, `ONDA_FIREBASE_PROJECT_ID` y `ONDA_FIREBASE_APP_ID`.
-
-Si los tres valores están presentes, la pantalla de acceso usará Firebase Auth de verdad.
+También sirven las variables `ONDA_FIREBASE_API_KEY`, `ONDA_FIREBASE_PROJECT_ID` y `ONDA_FIREBASE_APP_ID`.
 
 ---
 
 ## Firma y actualizaciones
 
-El APK de release está firmado con `app/onda-release.keystore` (alias `onda`). Ese archivo **no se sube a GitHub**. Guárdalo junto con la contraseña de `local.properties`:
+El APK de release se firma con `app/onda-release.keystore` (alias `onda`), que **no se sube a GitHub**. Guárdalo junto a la contraseña:
 
 ```properties
 onda.storePassword=...
@@ -71,82 +73,55 @@ onda.keyPassword=...
 onda.keyAlias=onda
 ```
 
-O las variables `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD` y `ONDA_KEY_ALIAS`.
+O las variables `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ONDA_KEY_ALIAS`.
 
-**Si se pierde el keystore, las futuras versiones ya no podrán actualizar la instalada.** Se generó con validez de 10.000 días.
+**Si se pierde el keystore, las futuras versiones no podrán actualizar la instalada.**
 
-El flujo de actualización es:
+Flujo: `/releases/latest` → compara tag con `VERSION_NAME` → descarga el primer `.apk` → `FileProvider` + `ACTION_INSTALL_PACKAGE`. Como coinciden paquete y firma, Android conserva la base de datos.
 
-1. `Updater.latest()` consulta `https://api.github.com/repos/SUPPLICASTE/Onda/releases/latest`.
-2. Compara el `tag_name` con `BuildConfig.VERSION_NAME`.
-3. Descarga el primer asset `.apk` a `filesDir`.
-4. Lo expone con `FileProvider` y lanza `ACTION_INSTALL_PACKAGE`.
-5. El usuario debe conceder permiso de "instalar aplicaciones desconocidas" una vez.
-
-Como el paquete y la firma coinciden, Android sobrescribe la app y **Room conserva álbumes e historial**.
+La base de datos pasa de versión 1 a 2 con `MIGRATION_1_2`, que **añade** tablas (playlists, Me gusta, búsquedas) sin borrar las existentes.
 
 ---
 
 ## Compilar
 
-Requiere JDK 17 y Android SDK 34. El wrapper Gradle está incluido.
+Requiere JDK 17 y Android SDK 34.
 
 ```powershell
-.\gradlew assembleDebug     # com.supplicaste.onda.debug
-.\gradlew assembleRelease   # com.supplicaste.onda, firmado
+.\gradlew assembleDebug
+.\gradlew assembleRelease
 ```
-
-APKs:
 
 - Debug: `app\build\outputs\apk\debug\app-debug.apk`
 - Release: `app\build\outputs\apk\release\app-release.apk`
 
-**Nota:** la ruta contiene `PROGRAMACIÓN` (acento), por lo que `gradle.properties` incluye `android.overridePathCheck=true`.
+La ruta contiene `PROGRAMACIÓN` (acento), por eso `gradle.properties` incluye `android.overridePathCheck=true`.
 
-Verificación de firma:
+---
+
+## GitHub Actions
+
+`.github/workflows/android.yml` ejecuta: checkout, JDK 17, Gradle, decodificar keystore, `assembleDebug`, `assembleRelease` firmado, verificar firma, subir artefactos y crear Release en tags `v*`. En PR solo compila el debug.
+
+Secrets: `ONDA_KEYSTORE_BASE64`, `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ONDA_KEY_ALIAS` (y los opcionales de Firebase).
+
+Nueva versión:
 
 ```powershell
-& "$env:LOCALAPPDATA\Android\Sdk\build-tools\34.0.0\apksigner.bat" verify --print-certs app\build\outputs\apk\release\app-release.apk
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
 ---
 
 ## Aviso legal
 
-La interfaz se inspira en patrones habituales de reproductores de música, pero **no usa** el nombre, el logo ni los recursos gráficos de Spotify. El catálogo se obtiene mediante NewPipeExtractor desde fuentes públicas; el usuario es responsable del uso que haga de esas fuentes y de las condiciones del proveedor.
-
----
-
-## GitHub Actions
-
-`.github/workflows/android.yml` automatiza todos los pasos:
-
-1. Checkout + JDK 17 + Gradle 8.7.
-2. Decodifica el keystore desde el secreto `ONDA_KEYSTORE_BASE64`.
-3. `assembleDebug` y `assembleRelease` firmado.
-4. Verifica la firma con `apksigner`.
-5. Sube ambos APK como artefactos (`onda-debug`, `onda-release`).
-6. Si el push es un tag `v*`, crea el Release y adjunta el APK firmado.
-
-Se ejecuta en `push` a `main`, en tags `v*`, en `pull_request` y manualmente (`workflow_dispatch`). En los PR no se usa el keystore: solo se compila el debug.
-
-**Secrets configurados en el repo:** `ONDA_KEYSTORE_BASE64`, `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ONDA_KEY_ALIAS`. Opcionales para Firebase: `ONDA_FIREBASE_API_KEY`, `ONDA_FIREBASE_PROJECT_ID`, `ONDA_FIREBASE_APP_ID`.
-
-Para publicar una versión nueva:
-
-```powershell
-git tag v1.0.2
-git push origin v1.0.2
-```
-
-El workflow compilará y creará el Release automáticamente.
+La interfaz se inspira en patrones habituales de reproductores de música, pero **no usa** el nombre, el logo ni los recursos gráficos de Spotify. El catálogo se obtiene mediante NewPipeExtractor desde fuentes públicas; el usuario es responsable del uso de esas fuentes y de sus condiciones.
 
 ---
 
 ## Estado
 
-- ✅ Debug y release compilados correctamente (20/11/2026).
-- ✅ Release firmada y verificada con `apksigner`.
-- ✅ Workflow de GitHub Actions configurado con secretos de firma.
-- ✅ Release `v1.0.1` generado íntegramente por Actions (13/13 pasos en verde).
-- ⏳ Pruebas en dispositivo físico pendientes (búsqueda real, streams, permiso de instalación).
+- ✅ Compile debug y release de v1.1.0.
+- ✅ Release firmada y generada por GitHub Actions.
+- ⏳ Pruebas en dispositivo físico: streams reales, notificación en segundo plano y permiso de instalación.
