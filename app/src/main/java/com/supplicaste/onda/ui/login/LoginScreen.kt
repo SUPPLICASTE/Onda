@@ -1,9 +1,6 @@
 package com.supplicaste.onda.ui.login
 
-import android.app.Activity
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.supplicaste.onda.auth.AuthManager
 import com.supplicaste.onda.ui.OndaViewModel
 import com.supplicaste.onda.ui.theme.OndaAccent
 
@@ -40,35 +36,18 @@ fun LoginScreen(
     message: String,
     loading: Boolean,
     mode: String,
-    googleAvailable: Boolean = false,
     spotifyAvailable: Boolean = false
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var wantYouTube by remember { mutableStateOf(false) }
     val context = LocalContext.current
-
-    val googleLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val (token, code) = try {
-                AuthManager(context).googleTokenAndCode(result.data)
-            } catch (e: Exception) {
-                null to null
-            }
-            if (token != null) {
-                vm.signInWithGoogleToken(token, if (wantYouTube) code else null)
-            }
-        }
-    }
 
     fun openSpotify() {
         val url = vm.spotifyAuthUrl()
         if (url != null) {
             CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
         } else {
-            vm.showMessage("Configura ONDA_SPOTIFY_CLIENT_ID y registra ondaoauth://spotify/callback en tu app de Spotify")
+            vm.showMessage("Abre Tu perfil y guarda tu Spotify Client ID; registra ondaoauth://spotify/callback en Spotify")
         }
     }
 
@@ -91,7 +70,7 @@ fun LoginScreen(
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Correo electrónico") },
+            label = { Text("Gmail o correo electrónico") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -122,34 +101,6 @@ fun LoginScreen(
             colors = ButtonDefaults.buttonColors(containerColor = OndaAccent, contentColor = Color.Black)
         ) { Text("Continuar con Spotify") }
 
-        Button(
-            onClick = {
-                wantYouTube = false
-                val intent = vm.googleSignInIntent(false)
-                if (intent != null) {
-                    googleLauncher.launch(intent)
-                } else {
-                    vm.showMessage("Configura Firebase y ONDA_GOOGLE_WEB_CLIENT_ID para entrar con Google")
-                }
-            },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Continuar con Google") }
-
-        Button(
-            onClick = {
-                wantYouTube = true
-                val intent = vm.googleSignInIntent(true)
-                if (intent != null) {
-                    googleLauncher.launch(intent)
-                } else {
-                    vm.showMessage("Configura Firebase, ONDA_GOOGLE_WEB_CLIENT_ID y ONDA_GOOGLE_CLIENT_SECRET para YouTube")
-                }
-            },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Continuar con YouTube") }
-
         Spacer(Modifier.height(12.dp))
 
         Text(
@@ -164,14 +115,7 @@ fun LoginScreen(
         )
         if (!spotifyAvailable) {
             Text(
-                "Spotify listo para configurar: añade tu Client ID en local.properties o ONDA_SPOTIFY_CLIENT_ID.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f)
-            )
-        }
-        if (!googleAvailable) {
-            Text(
-                "Google necesita Firebase + Web Client ID.",
+                "Spotify listo para configurar: abre Tu perfil y guarda tu Client ID (o usa ONDA_SPOTIFY_CLIENT_ID).",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.6f)
             )

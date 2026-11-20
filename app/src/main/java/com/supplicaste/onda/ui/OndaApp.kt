@@ -99,7 +99,6 @@ fun OndaApp(vm: OndaViewModel = viewModel()) {
                 message = state.message,
                 loading = state.loading,
                 mode = state.authMode,
-                googleAvailable = state.googleAvailable,
                 spotifyAvailable = state.spotifyAvailable
             )
             return@OndaTheme

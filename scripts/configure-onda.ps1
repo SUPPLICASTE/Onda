@@ -1,10 +1,9 @@
 <#
 .SYNOPSIS
-Configura las credenciales de Onda (Firebase, Google y Spotify) en local.properties
-y en los GitHub Secrets del repositorio.
+Configura el Client ID de Spotify de Onda en local.properties y en los GitHub Secrets.
 
 .DESCRIPTION
-No muestra los valores por pantalla. Ejecútalo desde cualquier directorio:
+No muestra el valor por pantalla. Ejecútalo desde cualquier directorio:
 
     .\scripts\configure-onda.ps1
 
@@ -21,46 +20,24 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $localProperties = Join-Path $root 'local.properties'
 
-function Read-Plain([string]$prompt) {
-    $value = Read-Host -Prompt $prompt
-    return $value.Trim()
-}
-
-function Read-Hidden([string]$prompt) {
-    # -MaskInput solo existe en PowerShell 7; -AsSecureString funciona en 5.1 y 7.
-    $secure = Read-Host -Prompt $prompt -AsSecureString
-    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-    try {
-        return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim()
-    } finally {
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    }
-}
-
 Write-Host ''
-Write-Host '=== Configuración de credenciales de Onda ===' -ForegroundColor Cyan
-Write-Host 'Los valores se guardan en local.properties (ignorado por Git) y, si se indica, en GitHub Secrets.'
+Write-Host '=== Configuración de Spotify para Onda ===' -ForegroundColor Cyan
+Write-Host 'Crea la app en https://developer.spotify.com/dashboard y añade el Redirect URI'
+Write-Host 'ondaoauth://spotify/callback antes de continuar.'
 Write-Host ''
 
-$firebaseApiKey = Read-Plain 'Firebase API key (AIza...)'
-$firebaseProjectId = Read-Plain 'Firebase Project ID'
-$firebaseAppId = Read-Plain 'Firebase App ID (1:123...:android:...)'
-$googleWebClientId = Read-Plain 'Google Web Client ID (...apps.googleusercontent.com)'
-$googleClientSecret = Read-Hidden 'Google Client Secret (se usa para importar YouTube)'
-$spotifyClientId = Read-Plain 'Spotify Client ID'
-$spotifyRedirectUri = Read-Plain 'Spotify Redirect URI [ondaoauth://spotify/callback]'
+$spotifyClientId = (Read-Host -Prompt 'Spotify Client ID').Trim()
+$spotifyRedirectUri = (Read-Host -Prompt 'Spotify Redirect URI [ondaoauth://spotify/callback]').Trim()
 if ([string]::IsNullOrWhiteSpace($spotifyRedirectUri)) {
     $spotifyRedirectUri = 'ondaoauth://spotify/callback'
 }
+if ([string]::IsNullOrWhiteSpace($spotifyClientId)) {
+    throw 'El Spotify Client ID no puede estar vacío.'
+}
 
 $values = [ordered]@{
-    'onda.firebase.apiKey'        = $firebaseApiKey
-    'onda.firebase.projectId'     = $firebaseProjectId
-    'onda.firebase.appId'         = $firebaseAppId
-    'onda.google.webClientId'     = $googleWebClientId
-    'onda.google.clientSecret'    = $googleClientSecret
-    'onda.spotify.clientId'       = $spotifyClientId
-    'onda.spotify.redirectUri'    = $spotifyRedirectUri
+    'onda.spotify.clientId'    = $spotifyClientId
+    'onda.spotify.redirectUri' = $spotifyRedirectUri
 }
 
 # ---------- local.properties ----------
@@ -88,22 +65,10 @@ if (-not $SkipGithub) {
         throw 'GitHub CLI no está autenticado. Ejecuta: gh auth login'
     }
 
-    $secrets = [ordered]@{
-        'ONDA_FIREBASE_API_KEY'       = $firebaseApiKey
-        'ONDA_FIREBASE_PROJECT_ID'    = $firebaseProjectId
-        'ONDA_FIREBASE_APP_ID'        = $firebaseAppId
-        'ONDA_GOOGLE_WEB_CLIENT_ID'   = $googleWebClientId
-        'ONDA_GOOGLE_CLIENT_SECRET'   = $googleClientSecret
-        'ONDA_SPOTIFY_CLIENT_ID'      = $spotifyClientId
-        'ONDA_SPOTIFY_REDIRECT_URI'   = $spotifyRedirectUri
-    }
-
-    foreach ($name in $secrets.Keys) {
-        $value = $secrets[$name]
-        if ([string]::IsNullOrWhiteSpace($value)) { continue }
-        gh secret set $name --body $value | Out-Null
-        Write-Host "OK  $name" -ForegroundColor Green
-    }
+    gh secret set ONDA_SPOTIFY_CLIENT_ID --body $spotifyClientId | Out-Null
+    gh secret set ONDA_SPOTIFY_REDIRECT_URI --body $spotifyRedirectUri | Out-Null
+    Write-Host 'OK  ONDA_SPOTIFY_CLIENT_ID' -ForegroundColor Green
+    Write-Host 'OK  ONDA_SPOTIFY_REDIRECT_URI' -ForegroundColor Green
 }
 
 # ---------- Build opcional ----------
@@ -120,5 +85,4 @@ if ($Build) {
 }
 
 Write-Host ''
-Write-Host 'Listo. En GitHub, crea un tag v1.1.6 para publicar el APK con estas credenciales.' -ForegroundColor Cyan
-Write-Host 'Recuerda añadir ondaoauth://spotify/callback en el Dashboard de Spotify y habilitar Google en Firebase.'
+Write-Host 'Listo. Crea el tag v1.1.7 para publicar el APK con Spotify activado.' -ForegroundColor Cyan

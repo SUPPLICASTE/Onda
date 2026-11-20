@@ -35,7 +35,14 @@ class AuthManager(private val context: Context) {
     val modeLabel: String get() = if (spotifyLinked) "Spotify" else if (configured) "Firebase" else "Local"
 
     val googleAvailable: Boolean get() = configured && BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()
-    val spotifyAvailable: Boolean get() = BuildConfig.SPOTIFY_CLIENT_ID.isNotBlank()
+
+    /** Client ID de Spotify: se puede introducir desde la app sin recompilar. */
+    var spotifyClientId: String
+        get() = prefs.getString("spotify_client_id", null)?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.SPOTIFY_CLIENT_ID
+        set(value) = prefs.edit { putString("spotify_client_id", value.trim()) }
+
+    val spotifyAvailable: Boolean get() = spotifyClientId.isNotBlank()
     val spotifyLinked: Boolean get() = !prefs.getString("spotify_token", null).isNullOrBlank()
     val spotifyEmail: String? get() = prefs.getString("spotify_email", null)
 
@@ -51,7 +58,7 @@ class AuthManager(private val context: Context) {
             val body = FormBody.Builder()
                 .add("grant_type", "refresh_token")
                 .add("refresh_token", refresh)
-                .add("client_id", BuildConfig.SPOTIFY_CLIENT_ID)
+                .add("client_id", spotifyClientId)
                 .build()
             try {
                 val request = Request.Builder()
@@ -189,7 +196,7 @@ class AuthManager(private val context: Context) {
         )
         return Uri.Builder().scheme("https").authority("accounts.spotify.com")
             .appendPath("authorize")
-            .appendQueryParameter("client_id", BuildConfig.SPOTIFY_CLIENT_ID)
+            .appendQueryParameter("client_id", spotifyClientId)
             .appendQueryParameter("response_type", "code")
             .appendQueryParameter("redirect_uri", spotifyRedirectUri())
             .appendQueryParameter("scope", "user-read-email user-read-private playlist-read-private playlist-read-collaborative")
@@ -215,7 +222,7 @@ class AuthManager(private val context: Context) {
             .add("grant_type", "authorization_code")
             .add("code", code)
             .add("redirect_uri", spotifyRedirectUri())
-            .add("client_id", BuildConfig.SPOTIFY_CLIENT_ID)
+            .add("client_id", spotifyClientId)
             .add("code_verifier", verifier)
             .build()
         val request = Request.Builder()

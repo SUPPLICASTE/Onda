@@ -280,6 +280,15 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     /** URL de autorización de Spotify; null si falta el Client ID. */
     fun spotifyAuthUrl(): String? = auth.spotifyAuthorizationUrl()
 
+    /** Guarda el Client ID de Spotify introducido desde la interfaz. */
+    fun setSpotifyClientId(value: String) {
+        auth.spotifyClientId = value
+        _state.value = _state.value.copy(
+            spotifyAvailable = auth.spotifyAvailable,
+            message = if (auth.spotifyAvailable) "Spotify configurado" else "Introduce un Client ID válido"
+        )
+    }
+
     private fun connectSpotify(code: String, state: String?) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, message = "Conectando con Spotify…")
         val exchange = auth.exchangeSpotifyCode(code, state)

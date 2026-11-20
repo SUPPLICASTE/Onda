@@ -12,12 +12,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +35,7 @@ import com.supplicaste.onda.ui.theme.OndaAccent
 fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
+    var clientId by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -75,7 +80,7 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
                             if (url != null) {
                                 CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
                             } else {
-                                vm.showMessage("Configura ONDA_SPOTIFY_CLIENT_ID y el redirect URI en tu app de Spotify")
+                                vm.showMessage("Guarda tu Client ID aquí y registra ondaoauth://spotify/callback en Spotify")
                             }
                         },
                         enabled = !state.loading,
@@ -92,18 +97,19 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
                     )
                 }
 
-                Text("YouTube", style = MaterialTheme.typography.titleMedium)
-                if (state.youtubeLinked) {
-                    Text(
-                        "Videos importados en tus playlists",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                OutlinedButton(
-                    onClick = { vm.importYouTube() },
+                Text("Client ID de Spotify", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = clientId,
+                    onValueChange = { clientId = it },
+                    label = { Text("Pégalo desde Spotify Developer Dashboard") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Importar playlists de YouTube") }
+                )
+                OutlinedButton(
+                    onClick = { vm.setSpotifyClientId(clientId) },
+                    enabled = clientId.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Guardar Client ID") }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
