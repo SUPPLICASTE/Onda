@@ -5,7 +5,7 @@
 **Onda** es un reproductor de música para Android con interfaz oscura inspirada en los patrones habituales de los reproductores modernos, sin anuncios. Permite buscar canciones, marcar **Me gusta**, crear álbumes y playlists, compartirlos por QR, reproducir en segundo plano con controles multimedia, activar un DJ que sugiere la siguiente canción e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
 
 - **Paquete:** `com.supplicaste.onda`
-- **Versión:** 1.1.0 (`versionCode 4`)
+- **Versión:** 1.1.1 (`versionCode 5`)
 - **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM + Room + Media3 + NewPipeExtractor
 
 ---
@@ -14,15 +14,15 @@
 
 | Función | Estado | Detalle |
 |---|---|---|
-| Interfaz tipo reproductor moderno | ✅ | Tema oscuro con acento verde, navegación inferior, tarjetas, mini-reproductor |
+| Interfaz tipo reproductor moderno | ✅ | Tema oscuro con acento verde, navegación inferior, cuadrículas, mini-reproductor flotante y barra superior con perfil |
 | Sin anuncios | ✅ | Ningún SDK publicitario |
 | Registro con correo | ✅ | Firebase Auth si hay credenciales; modo local si no las hay |
-| Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube), búsquedas recientes |
+| Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube); **tocar un resultado lo reproduce**; "Mejor resultado", filtros Canciones/Artistas y búsquedas recientes |
 | Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano y notificación multimedia |
 | **Me gusta** | ✅ | Botón en cada canción y playlist especial "Me gusta" |
-| **Pantalla de reproducción** | ✅ | Carátula, progreso, aleatorio, anterior/siguiente, repetir, cola editable |
+| **Pantalla de reproducción** | ✅ | Fondo difuminado con la carátula, progreso, aleatorio, anterior/siguiente, repetir y cola editable |
 | Menú de cada canción | ✅ | Reproducir, reproducir siguiente, Me gusta, añadir a álbum o playlist |
-| Álbumes y playlists | ✅ | Crear, renombrar, borrar, añadir y quitar canciones |
+| Álbumes y playlists | ✅ | Biblioteca en cuadrícula con menú "+", crear, renombrar, borrar, añadir y quitar canciones |
 | Compartir con amigos | ✅ | Código QR (ZXing) + campo para importar o escanear |
 | DJ opcional | ✅ | Sugiere la siguiente canción según Me gusta, historial y artistas |
 | Perfil | ✅ | Correo, estadísticas, tema oscuro/claro, comprobación de updates |
@@ -108,8 +108,8 @@ Secrets: `ONDA_KEYSTORE_BASE64`, `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ON
 Nueva versión:
 
 ```powershell
-git tag v1.1.1
-git push origin v1.1.1
+git tag v1.1.2
+git push origin v1.1.2
 ```
 
 ---
@@ -122,6 +122,6 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
-- ✅ Compile debug y release de v1.1.0.
+- ✅ Compilan debug y release de v1.1.1 (rediseño completo).
 - ✅ Release firmada y generada por GitHub Actions.
 - ⏳ Pruebas en dispositivo físico: streams reales, notificación en segundo plano y permiso de instalación.

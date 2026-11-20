@@ -75,6 +75,7 @@ fun CollectionDialog(
                             SongLine(
                                 song = song,
                                 liked = song.id in state.likedIds,
+                                selected = song.id == state.currentSong?.id,
                                 onPlay = { vm.play(song, songs) },
                                 onLike = { vm.toggleLike(song) },
                                 onRemove = {
@@ -108,6 +109,7 @@ fun CollectionDialog(
 private fun SongLine(
     song: com.supplicaste.onda.data.Song,
     liked: Boolean,
+    selected: Boolean = false,
     onPlay: () -> Unit,
     onLike: () -> Unit,
     onRemove: () -> Unit
@@ -120,7 +122,12 @@ private fun SongLine(
             Icon(Icons.Filled.PlayArrow, contentDescription = "Reproducir")
         }
         Column(Modifier.weight(1f)) {
-            Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            Text(
+                song.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) OndaAccent else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
             Text(
                 song.artist,
                 style = MaterialTheme.typography.bodySmall,

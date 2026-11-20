@@ -1,6 +1,7 @@
 package com.supplicaste.onda.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -26,9 +28,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.supplicaste.onda.data.AlbumEntity
@@ -54,6 +57,7 @@ fun SongRow(
     onAddAlbum: (Long) -> Unit,
     onAddPlaylist: (Long) -> Unit,
     onPlayNext: () -> Unit,
+    selected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -61,10 +65,30 @@ fun SongRow(
     var playlistsOpen by remember { mutableStateOf(false) }
 
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onPlay() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Artwork(song.artwork, 48.dp)
+        Box {
+            Artwork(song.artwork, 48.dp)
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .align(Alignment.Center)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
 
         Spacer(Modifier.width(12.dp))
 
@@ -72,6 +96,7 @@ fun SongRow(
             Text(
                 song.title,
                 style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) OndaAccent else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -153,7 +178,7 @@ fun SongRow(
 }
 
 @Composable
-fun Artwork(url: String, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+fun Artwork(url: String, size: Dp, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .size(size)
@@ -183,8 +208,8 @@ fun PlayOverlay(onClick: () -> Unit, modifier: Modifier = Modifier) {
         onClick = onClick,
         modifier = modifier
             .size(40.dp)
-            .clip(RoundedCornerShape(50))
-            .background(OndaAccent.copy(alpha = 0.92f))
+            .clip(CircleShape)
+            .background(OndaAccent)
     ) {
         Icon(Icons.Filled.PlayArrow, contentDescription = "Reproducir", tint = Color.Black)
     }
