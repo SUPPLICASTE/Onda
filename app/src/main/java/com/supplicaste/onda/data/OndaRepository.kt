@@ -132,18 +132,39 @@ class OndaRepository(private val dao: OndaDao) {
 
     suspend fun deleteSearch(query: String) = withContext(Dispatchers.IO) { dao.deleteSearch(query) }
 
-    suspend fun resolveStream(song: Song): String? = withContext(Dispatchers.IO) {
-        streamCache[song.sourceUrl]?.let { return@withContext it }
+    private suspend fun streamFromYouTube(sourceUrl: String): String? = withContext(Dispatchers.IO) {
         ensureNewPipe()
         try {
-            val extractor = ServiceList.YouTube.getStreamExtractor(song.sourceUrl)
+            val extractor = ServiceList.YouTube.getStreamExtractor(sourceUrl)
             extractor.fetchPage()
-            val url = extractor.audioStreams.maxByOrNull { it.averageBitrate }?.url
-            if (url != null) streamCache[song.sourceUrl] = url
-            url
+            extractor.audioStreams.maxByOrNull { it.averageBitrate }?.url
         } catch (e: Exception) {
             null
         }
+    }
+
+    suspend fun resolveStream(song: Song): String? = withContext(Dispatchers.IO) {
+        streamCache[song.sourceUrl]?.let { return@withContext it }
+        val source = song.sourceUrl
+        // Las canciones importadas de Spotify guardan "spotify:artista título": se busca su audio en YouTube.
+        val url = if (source.startsWith("spotify:")) {
+            val query = source.removePrefix("spotify:")
+            val found = try {
+                ensureNewPipe()
+                ServiceList.YouTube.getSearchExtractor(query)
+                    .apply { fetchPage() }
+                    .initialPage.items
+                    .filterIsInstance<StreamInfoItem>()
+                    .firstOrNull()
+            } catch (e: Exception) {
+                null
+            }
+            if (found != null) streamFromYouTube(found.url) else null
+        } else {
+            streamFromYouTube(source)
+        }
+        if (url != null) streamCache[source] = url
+        url
     }
 
     private suspend fun upsert(song: Song) {
@@ -179,6 +200,33 @@ class OndaRepository(private val dao: OndaDao) {
 
     suspend fun createPlaylist(name: String): Long = withContext(Dispatchers.IO) {
         dao.insertPlaylist(PlaylistEntity(name = name.trim().ifBlank { "Nueva playlist" }))
+    }
+
+    /** Importa playlists de Spotify como playlists locales; el audio se busca en YouTube al reproducir. */
+    suspend fun importSpotify(playlists: List<SpotifyPlaylist>): Int = withContext(Dispatchers.IO) {
+        var imported = 0
+        playlists.forEach { playlist ->
+            val name = "Spotify · ${playlist.name.take(60)}"
+            val existing = dao.playlistByName(name)
+            val playlistId = existing?.id ?: dao.insertPlaylist(PlaylistEntity(name = name))
+            if (existing != null) dao.clearPlaylist(playlistId)
+            playlist.tracks.forEach { track ->
+                val song = Song(
+                    id = "spotify_${track.id}",
+                    title = track.title,
+                    artist = track.artist,
+                    durationSec = track.durationSec,
+                    artwork = track.artwork,
+                    sourceUrl = "spotify:${track.artist} ${track.title}"
+                )
+                upsert(song)
+                dao.insertPlaylistSong(
+                    PlaylistSongEntity(playlistId, song.id, dao.songsInPlaylistOnce(playlistId).size)
+                )
+                imported++
+            }
+        }
+        imported
     }
 
     suspend fun renamePlaylist(playlistId: Long, name: String) = withContext(Dispatchers.IO) {

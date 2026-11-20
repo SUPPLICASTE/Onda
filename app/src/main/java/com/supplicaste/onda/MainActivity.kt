@@ -26,6 +26,21 @@ class MainActivity : ComponentActivity() {
             )
         }
         setContent { OndaApp() }
+        handleIncoming(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIncoming(intent)
+    }
+
+    /** Callback OAuth de Spotify: ondaoauth://spotify/callback?code=...&state=... */
+    private fun handleIncoming(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "ondaoauth" || data.host != "spotify") return
+        val code = data.getQueryParameter("code") ?: return
+        val state = data.getQueryParameter("state").orEmpty()
+        OndaBus.spotifyCode.tryEmit("$code|$state")
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

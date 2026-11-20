@@ -1,8 +1,11 @@
 package com.supplicaste.onda.ui.login
 
 import android.app.Activity
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -23,11 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.supplicaste.onda.auth.AuthManager
 import com.supplicaste.onda.ui.OndaViewModel
+import com.supplicaste.onda.ui.theme.OndaAccent
 
 @Composable
 fun LoginScreen(
@@ -35,7 +41,8 @@ fun LoginScreen(
     message: String,
     loading: Boolean,
     mode: String,
-    googleAvailable: Boolean = false
+    googleAvailable: Boolean = false,
+    spotifyAvailable: Boolean = false
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -54,13 +61,29 @@ fun LoginScreen(
         }
     }
 
+    fun openSpotify() {
+        val url = vm.spotifyAuthUrl()
+        if (url != null) {
+            CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+        } else {
+            vm.showMessage("Configura ONDA_SPOTIFY_CLIENT_ID y registra ondaoauth://spotify/callback en tu app de Spotify")
+        }
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Onda", style = MaterialTheme.typography.headlineLarge)
-        Text("Tu música, sin ruido", style = MaterialTheme.typography.bodyMedium)
+        Text("Onda", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+        Text(
+            "Tu música, sin ruido",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.75f)
+        )
         Spacer(Modifier.height(24.dp))
 
         OutlinedTextField(
@@ -91,18 +114,24 @@ fun LoginScreen(
         Spacer(Modifier.height(16.dp))
 
         Button(
+            onClick = { openSpotify() },
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = OndaAccent, contentColor = Color.Black)
+        ) { Text("Continuar con Spotify") }
+
+        Button(
             onClick = {
-                vm.googleSignInIntent()?.let { googleLauncher.launch(it) }
+                val intent = vm.googleSignInIntent()
+                if (intent != null) {
+                    googleLauncher.launch(intent)
+                } else {
+                    vm.showMessage("Configura Firebase y ONDA_GOOGLE_WEB_CLIENT_ID para entrar con Google")
+                }
             },
-            enabled = !loading && googleAvailable,
+            enabled = !loading,
             modifier = Modifier.fillMaxWidth()
         ) { Text("Continuar con Google") }
-
-        OutlinedButton(
-            onClick = {},
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Spotify · Próximamente") }
 
         OutlinedButton(
             onClick = {},
@@ -114,18 +143,30 @@ fun LoginScreen(
 
         Text(
             text = when {
-                !googleAvailable && mode == "Local" ->
+                mode == "Local" ->
                     "Modo local: el correo se guarda solo en este dispositivo. " +
-                        "Configura Firebase y el Client ID de Google para activar el acceso real."
-                !googleAvailable ->
-                    "Configura ONDA_GOOGLE_WEB_CLIENT_ID para activar el acceso con Google."
-                else -> "Registro verificado con Firebase"
+                        "Con Spotify puedes importar tus playlists y vincular la cuenta después desde Tu perfil."
+                else -> "Registro verificado con Firebase · $mode"
             },
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = Color.White.copy(alpha = 0.7f)
         )
+        if (!spotifyAvailable) {
+            Text(
+                "Spotify listo para configurar: añade tu Client ID en local.properties o ONDA_SPOTIFY_CLIENT_ID.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f)
+            )
+        }
+        if (!googleAvailable) {
+            Text(
+                "Google necesita Firebase + Web Client ID.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f)
+            )
+        }
         if (message.isNotBlank()) {
-            Text(message, style = MaterialTheme.typography.bodySmall)
+            Text(message, style = MaterialTheme.typography.bodySmall, color = Color.White)
         }
     }
 }

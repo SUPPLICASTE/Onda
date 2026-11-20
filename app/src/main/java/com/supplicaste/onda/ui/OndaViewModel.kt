@@ -20,6 +20,7 @@ import com.supplicaste.onda.data.OndaDatabase
 import com.supplicaste.onda.data.OndaRepository
 import com.supplicaste.onda.data.OndaStats
 import com.supplicaste.onda.data.Song
+import com.supplicaste.onda.data.SpotifyImporter
 import com.supplicaste.onda.data.toSong
 import com.supplicaste.onda.player.OndaPlayer
 import com.supplicaste.onda.share.QrCodec
@@ -55,6 +56,9 @@ data class OndaUiState(
     val qr: Bitmap? = null,
     val shareCode: String? = null,
     val googleAvailable: Boolean = false,
+    val spotifyAvailable: Boolean = false,
+    val spotifyLinked: Boolean = false,
+    val spotifyEmail: String? = null,
     val updateAvailable: String? = null
 )
 
@@ -64,6 +68,7 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
         .build()
     private val repository = OndaRepository(database.dao())
     private val auth = AuthManager(app)
+    private val spotify = SpotifyImporter()
     private val prefs = app.getSharedPreferences("onda_prefs", Application.MODE_PRIVATE)
     private var playerListener: Player.Listener? = null
 
@@ -87,7 +92,19 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
             syncPlayer()
         }
 
-        _state.value = _state.value.copy(googleAvailable = auth.googleAvailable)
+        _state.value = _state.value.copy(
+            googleAvailable = auth.googleAvailable,
+            spotifyAvailable = auth.spotifyAvailable,
+            spotifyLinked = auth.spotifyLinked,
+            spotifyEmail = auth.spotifyEmail
+        )
+
+        viewModelScope.launch {
+            OndaBus.spotifyCode.collect { payload ->
+                val parts = payload.split("|", limit = 2)
+                connectSpotify(parts[0], parts.getOrNull(1))
+            }
+        }
 
         viewModelScope.launch {
             repository.likedIds.collect { ids -> _state.value = _state.value.copy(likedIds = ids.toSet()) }
@@ -212,11 +229,72 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    /** URL de autorización de Spotify; null si falta el Client ID. */
+    fun spotifyAuthUrl(): String? = auth.spotifyAuthorizationUrl()
+
+    private fun connectSpotify(code: String, state: String?) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, message = "Conectando con Spotify…")
+        val exchange = auth.exchangeSpotifyCode(code, state)
+        if (exchange.isFailure) {
+            _state.value = _state.value.copy(
+                loading = false,
+                message = "Error: ${exchange.exceptionOrNull()?.message}"
+            )
+            return@launch
+        }
+        importFromSpotify(exchange.getOrThrow())
+    }
+
+    /** Importa (o actualiza) las playlists de Spotify; se usa al conectar y desde Perfil. */
+    fun refreshSpotify() = viewModelScope.launch {
+        val token = auth.spotifyAccessToken()
+        if (token == null) {
+            _state.value = _state.value.copy(message = "Vincula Spotify primero desde Tu perfil")
+            return@launch
+        }
+        importFromSpotify(token)
+    }
+
+    private suspend fun importFromSpotify(token: String) {
+        _state.value = _state.value.copy(message = "Leyendo tus playlists de Spotify…")
+        val profile = spotify.profile(token)
+        if (profile == null) {
+            _state.value = _state.value.copy(
+                loading = false,
+                message = "No se pudo leer tu cuenta de Spotify"
+            )
+            return
+        }
+        auth.saveSpotifyProfile(profile.email, profile.displayName)
+        val playlists = spotify.playlists(token)
+        val count = repository.importSpotify(playlists)
+        _state.value = _state.value.copy(
+            loading = false,
+            email = auth.currentEmail(),
+            authMode = auth.modeLabel,
+            spotifyLinked = true,
+            spotifyEmail = profile.email.ifBlank { profile.displayName },
+            message = "Spotify vinculado: ${playlists.size} playlists y $count canciones importadas"
+        )
+    }
+
+    fun unlinkSpotify() {
+        auth.unlinkSpotify()
+        _state.value = _state.value.copy(
+            spotifyLinked = false,
+            spotifyEmail = null,
+            authMode = auth.modeLabel,
+            message = "Spotify desvinculado"
+        )
+    }
+
     fun signOut() {
         auth.signOut()
         OndaPlayer.get()?.stop()
         _state.value = OndaUiState(
             authMode = auth.modeLabel,
+            googleAvailable = auth.googleAvailable,
+            spotifyAvailable = auth.spotifyAvailable,
             darkTheme = _state.value.darkTheme,
             message = "Sesión cerrada"
         )
@@ -230,6 +308,10 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearMessage() {
         _state.value = _state.value.copy(message = "")
+    }
+
+    fun showMessage(text: String) {
+        _state.value = _state.value.copy(message = text)
     }
 
     fun clearQr() {

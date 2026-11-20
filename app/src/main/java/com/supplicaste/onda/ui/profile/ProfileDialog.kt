@@ -1,26 +1,36 @@
 package com.supplicaste.onda.ui.profile
 
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.supplicaste.onda.BuildConfig
 import com.supplicaste.onda.ui.OndaViewModel
+import com.supplicaste.onda.ui.theme.OndaAccent
 
 @Composable
 fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
     val state by vm.state.collectAsState()
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -43,9 +53,48 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
                     Text("Reproducciones: ${state.stats.plays}")
                 }
 
+                Text("Spotify", style = MaterialTheme.typography.titleMedium)
+                if (state.spotifyLinked) {
+                    Text(
+                        "Vinculado como ${state.spotifyEmail.orEmpty()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = { vm.refreshSpotify() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Importar playlists de nuevo") }
+                    OutlinedButton(
+                        onClick = { vm.unlinkSpotify() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Desvincular Spotify") }
+                } else {
+                    Button(
+                        onClick = {
+                            val url = vm.spotifyAuthUrl()
+                            if (url != null) {
+                                CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+                            } else {
+                                vm.showMessage("Configura ONDA_SPOTIFY_CLIENT_ID y el redirect URI en tu app de Spotify")
+                            }
+                        },
+                        enabled = !state.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OndaAccent,
+                            contentColor = Color.Black
+                        )
+                    ) { Text("Vincular Spotify") }
+                    Text(
+                        "Importa tus playlists con carátula. El audio se busca en YouTube al reproducir.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Tema oscuro", modifier = Modifier.weight(1f))
                     Switch(checked = state.darkTheme, onCheckedChange = { vm.toggleTheme() })

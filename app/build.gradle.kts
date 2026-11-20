@@ -22,13 +22,19 @@ android {
         applicationId = "com.supplicaste.onda"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.1.3"
+        versionCode = 8
+        versionName = "1.1.4"
 
         buildConfigField("String", "FIREBASE_API_KEY", "\"${secret("onda.firebase.apiKey", "ONDA_FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${secret("onda.firebase.projectId", "ONDA_FIREBASE_PROJECT_ID")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${secret("onda.firebase.appId", "ONDA_FIREBASE_APP_ID")}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${secret("onda.google.webClientId", "ONDA_GOOGLE_WEB_CLIENT_ID")}\"")
+        buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${secret("onda.spotify.clientId", "ONDA_SPOTIFY_CLIENT_ID")}\"")
+        buildConfigField(
+            "String",
+            "SPOTIFY_REDIRECT_URI",
+            "\"${secret("onda.spotify.redirectUri", "ONDA_SPOTIFY_REDIRECT_URI").ifBlank { "ondaoauth://spotify/callback" }}\""
+        )
         buildConfigField("String", "UPDATER_REPO", "\"SUPPLICASTE/Onda\"")
     }
 
@@ -88,6 +94,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.browser:browser:1.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.compose.ui:ui")

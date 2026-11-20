@@ -4,4 +4,5 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 object OndaBus {
     val imported = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val spotifyCode = MutableSharedFlow<String>(extraBufferCapacity = 1)
 }
