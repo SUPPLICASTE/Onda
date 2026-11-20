@@ -2,8 +2,10 @@ package com.supplicaste.onda.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -26,33 +28,81 @@ data class SpotifyPlaylist(
     val tracks: List<SpotifyTrack>
 )
 
-/** Lee el perfil y las playlists del usuario desde la Web API de Spotify. */
+/**
+ * Lee el perfil y las playlists de Spotify.
+ *
+ * El token del reproductor web solo funciona si se envían los mismos headers
+ * que la web de Spotify (`app-platform`, `Origin`, `Referer` y un User-Agent
+ * de navegador). Si la REST API rechaza el perfil se usa la API GraphQL
+ * interna del reproductor, igual que hace ArchiveTune.
+ */
 class SpotifyImporter {
     private val client = OkHttpClient()
 
-    private suspend fun getJson(url: String, token: String): JSONObject? = withContext(Dispatchers.IO) {
-        try {
-            val request = Request.Builder()
-                .url(url)
-                .header("Authorization", "Bearer $token")
-                .build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
-                val body = response.body?.string().orEmpty()
-                runCatching { JSONObject(body) }.getOrNull()
-            }
-        } catch (e: Exception) {
-            null
+    private fun request(url: String, token: String): Request.Builder =
+        Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $token")
+            .header("User-Agent", USER_AGENT)
+            .header("app-platform", "WebPlayer")
+            .header("Origin", "https://open.spotify.com")
+            .header("Referer", "https://open.spotify.com/")
+            .header("Accept", "application/json")
+            .header("Accept-Language", "en")
+
+    private fun getJson(url: String, token: String): JSONObject? = runCatching {
+        client.newCall(request(url, token).build()).execute().use { response ->
+            if (!response.isSuccessful) return null
+            runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
         }
+    }.getOrNull()
+
+    /** Perfil por REST; si falla, se consulta GraphQL (`profileAttributes`). */
+    suspend fun profile(token: String): SpotifyProfile? = withContext(Dispatchers.IO) {
+        val json = getJson("https://api.spotify.com/v1/me", token)
+        if (json != null) {
+            val id = json.optString("id")
+            val name = json.optString("display_name")
+            if (id.isNotBlank() || name.isNotBlank()) {
+                return@withContext SpotifyProfile(
+                    id = id,
+                    email = json.optString("email"),
+                    displayName = name.ifBlank { id }
+                )
+            }
+        }
+        profileFromGraphql(token)
     }
 
-    suspend fun profile(token: String): SpotifyProfile? = withContext(Dispatchers.IO) {
-        val json = getJson("https://api.spotify.com/v1/me", token) ?: return@withContext null
-        SpotifyProfile(
-            id = json.optString("id"),
-            email = json.optString("email"),
-            displayName = json.optString("display_name").ifBlank { json.optString("id") }
-        )
+    /** Perfil con la query persistida que usa el reproductor web de Spotify. */
+    private fun profileFromGraphql(token: String): SpotifyProfile? {
+        val body = JSONObject()
+            .put("variables", JSONObject())
+            .put("operationName", "profileAttributes")
+            .put(
+                "extensions",
+                JSONObject().put(
+                    "persistedQuery",
+                    JSONObject().put("version", 1).put("sha256Hash", PROFILE_HASH)
+                )
+            )
+            .toString()
+            .toRequestBody(JSON_TYPE)
+
+        return runCatching {
+            client.newCall(request(GQL_URL, token).post(body).build()).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val root = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                    ?: return null
+                val profile = root.optJSONObject("data")?.optJSONObject("me")?.optJSONObject("profile")
+                    ?: return null
+                val id = profile.optString("uri").substringAfterLast(":")
+                val name = profile.optString("name").ifBlank { id }
+                if (id.isBlank() && name.isBlank()) return null
+                // GraphQL del reproductor web no expone el correo; se usa el nombre.
+                SpotifyProfile(id = id, email = "", displayName = name)
+            }
+        }.getOrNull()
     }
 
     suspend fun playlists(token: String): List<SpotifyPlaylist> = withContext(Dispatchers.IO) {
@@ -97,5 +147,14 @@ class SpotifyImporter {
             pages++
         }
         return result
+    }
+
+    private companion object {
+        const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+        const val GQL_URL = "https://api-partner.spotify.com/pathfinder/v2/query"
+        const val PROFILE_HASH =
+            "53bcb064f6cd18c23f752bc324a791194d20df612d8e1239c735144ab0399ced"
+        val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }

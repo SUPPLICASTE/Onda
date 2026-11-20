@@ -224,12 +224,17 @@ fun SpotifyLoginSheet(
                         rootWebView.value = main
                         activeWebView = main
 
-                        cookieManager.removeAllCookies(null)
-                        cookieManager.flush()
-                        main.clearCache(true)
-                        main.clearHistory()
-                        main.clearFormData()
-                        main.loadUrl(SpotifyWebAuth.LOGIN_URL)
+                        // Esperar a que se borren las cookies antes de cargar;
+                        // si se hace en paralelo se puede perder la sesión nueva.
+                        cookieManager.removeAllCookies {
+                            cookieManager.flush()
+                            main.post {
+                                main.clearCache(true)
+                                main.clearHistory()
+                                main.clearFormData()
+                                main.loadUrl(SpotifyWebAuth.LOGIN_URL)
+                            }
+                        }
                         container
                     },
                     onRelease = { container ->
