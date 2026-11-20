@@ -93,6 +93,16 @@ O las variables `ONDA_SPOTIFY_CLIENT_ID` / `ONDA_SPOTIFY_REDIRECT_URI`. Se usa P
 
 GitHub Actions lee estos mismos valores desde secrets: `ONDA_FIREBASE_*`, `ONDA_GOOGLE_WEB_CLIENT_ID`, `ONDA_GOOGLE_CLIENT_SECRET`, `ONDA_SPOTIFY_CLIENT_ID` y `ONDA_SPOTIFY_REDIRECT_URI`.
 
+### Configuración en un paso
+
+Ejecuta el asistente; te pide los siete valores, escribe `local.properties` y crea los GitHub Secrets (no imprime secretos):
+
+```powershell
+.\scripts\configure-onda.ps1
+```
+
+Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.1.6` para publicar el APK con las credenciales incluidas.
+
 ---
 
 ## Firma y actualizaciones
