@@ -17,7 +17,7 @@
 | Interfaz tipo reproductor moderno | ✅ | Tema oscuro con acento verde, navegación inferior, biblioteca con carátulas reales, mini-reproductor flotante y barra superior con perfil |
 | Sin anuncios | ✅ | Ningún SDK publicitario |
 | Registro con correo / Gmail | ✅ | Modo local: el correo se guarda solo en este dispositivo |
-| Acceso con Spotify | ✅ | OAuth 2.0 con PKCE: registra o vincula después desde Tu perfil e importa tus playlists con carátula, título, artista y duración |
+| Acceso con Spotify | ✅ | Inicia sesión con tu cuenta en un `WebView` integrado (sin Client ID) u OAuth 2.0 con PKCE si tienes uno; importa tus playlists con carátula, título, artista y duración |
 | Audio de Spotify | ✅ | Se buscan en YouTube las canciones importadas para poder reproducirlas sin Premium; el token se renueva solo |
 | Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube); **tocar un resultado lo reproduce**; "Mejor resultado", filtros Canciones/Artistas e **historial visible con borrado individual** |
 | Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano, notificación multimedia, **avance automático al terminar** y **pausa/reanude por foco de audio** |
@@ -39,7 +39,7 @@
 |---|---|---|
 | Nombre | **Onda** | Propio; no usa nombre, logo ni recursos de Spotify |
 | Catálogo | NewPipeExtractor / YouTube | Grandes listas sin descargar archivos |
-| Registro | Modo local + Spotify OAuth | Sin credenciales de Google/Firebase: solo hace falta el Client ID de Spotify |
+| Registro | Modo local + cuenta web de Spotify | Sin credenciales de Google/Firebase y sin Client ID: el login se hace en un `WebView`; PKCE queda como alternativa |
 | Compartir | QR / texto | Sin backend propio |
 | DJ | Local, sin IA externa | Basado en canción actual, colecciones, Me gusta e historial |
 | Reproductor | `MediaSessionService` | Música en segundo plano y controles en notificación |
@@ -47,9 +47,11 @@
 
 ---
 
-## Configuración de Spotify (única necesaria)
+## Acceso con Spotify
 
-Esta build usa **solo Spotify** como acceso social. El registro con correo/Gmail funciona en modo local sin credenciales. Para entrar con Spotify e importar playlists:
+El botón **Continuar con Spotify** abre una ventana de Spotify dentro de la app, captura las cookies de sesión (`sp_dc`/`sp_key`) y obtiene el token del reproductor web. **No hay que configurar nada**: funciona con tu usuario y contraseña de Spotify y guarda la sesión solo en este dispositivo. Este mecanismo es el mismo que usa ArchiveTune y depende de endpoints internos y de un secreto TOTP publicado por la comunidad, así que puede dejar de funcionar si Spotify cambia su reproductor web.
+
+Si lo prefieres, puedes usar el flujo oficial **OAuth 2.0 con PKCE** desde **Tu perfil → Usar OAuth con Client ID**. Para ello:
 
 1. Crea una app en el [Dashboard de desarrolladores de Spotify](https://developer.spotify.com/dashboard).
 2. Añade `ondaoauth://spotify/callback` en *Redirect URIs*.
@@ -60,7 +62,7 @@ onda.spotify.clientId=tu-client-id
 onda.spotify.redirectUri=ondaoauth://spotify/callback
 ```
 
-O las variables `ONDA_SPOTIFY_CLIENT_ID` / `ONDA_SPOTIFY_REDIRECT_URI`. Se usa PKCE, así que **no hace falta Client Secret**. También puedes pegar el Client ID directamente en **Tu perfil → Guardar Client ID**, sin recompilar ni dármelo a mí. Sin Client ID, el botón explica qué configurar.
+O las variables `ONDA_SPOTIFY_CLIENT_ID` / `ONDA_SPOTIFY_REDIRECT_URI`. Se usa PKCE, así que **no hace falta Client Secret**. También puedes pegar el Client ID directamente en **Tu perfil → Guardar Client ID**, sin recompilar ni dármelo a mí. Sin Client ID, el acceso por `WebView` sigue funcionando.
 
 GitHub Actions lee estos mismos valores desde secrets: `ONDA_SPOTIFY_CLIENT_ID` y `ONDA_SPOTIFY_REDIRECT_URI`.
 

@@ -3,6 +3,7 @@ package com.supplicaste.onda.ui.profile
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.supplicaste.onda.BuildConfig
 import com.supplicaste.onda.ui.OndaViewModel
+import com.supplicaste.onda.ui.login.SpotifyLoginSheet
 import com.supplicaste.onda.ui.theme.OndaAccent
 
 @Composable
@@ -36,8 +38,10 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     var clientId by remember { mutableStateOf("") }
+    var showSpotifyLogin by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    Box {
+        AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Tu perfil") },
         text = {
@@ -75,6 +79,20 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
                     ) { Text("Desvincular Spotify") }
                 } else {
                     Button(
+                        onClick = { showSpotifyLogin = true },
+                        enabled = !state.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OndaAccent,
+                            contentColor = Color.Black
+                        )
+                    ) { Text("Iniciar sesión con Spotify") }
+                    Text(
+                        "Importa tus playlists con carátula. El audio se busca en YouTube al reproducir.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(
                         onClick = {
                             val url = vm.spotifyAuthUrl()
                             if (url != null) {
@@ -83,18 +101,8 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
                                 vm.showMessage("Guarda tu Client ID aquí y registra ondaoauth://spotify/callback en Spotify")
                             }
                         },
-                        enabled = !state.loading,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OndaAccent,
-                            contentColor = Color.Black
-                        )
-                    ) { Text("Vincular Spotify") }
-                    Text(
-                        "Importa tus playlists con carátula. El audio se busca en YouTube al reproducir.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        enabled = !state.loading
+                    ) { Text("Usar OAuth con Client ID") }
                 }
 
                 Text("Client ID de Spotify", style = MaterialTheme.typography.titleSmall)
@@ -132,5 +140,15 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } },
         dismissButton = { TextButton(onClick = { vm.signOut() }) { Text("Cerrar sesión") } }
-    )
+        )
+        if (showSpotifyLogin) {
+            SpotifyLoginSheet(
+                onDismiss = { showSpotifyLogin = false },
+                onCookiesCaptured = { spDc, spKey ->
+                    showSpotifyLogin = false
+                    vm.connectSpotifyWithCookies(spDc, spKey)
+                }
+            )
+        }
+    }
 }

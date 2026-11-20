@@ -302,6 +302,23 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
         importFromSpotify(exchange.getOrThrow())
     }
 
+    /** Conecta con la cuenta web de Spotify sin Client ID (flujo ArchiveTune). */
+    fun connectSpotifyWithCookies(
+        spDc: String,
+        spKey: String,
+    ) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, message = "Conectando con Spotify…")
+        val result = auth.connectSpotifyWithCookies(spDc, spKey)
+        if (result.isFailure) {
+            _state.value = _state.value.copy(
+                loading = false,
+                message = "Error: ${result.exceptionOrNull()?.message}"
+            )
+            return@launch
+        }
+        importFromSpotify(result.getOrThrow())
+    }
+
     /** Importa (o actualiza) las playlists de Spotify; se usa al conectar y desde Perfil. */
     fun refreshSpotify() = viewModelScope.launch {
         val token = auth.validSpotifyToken()

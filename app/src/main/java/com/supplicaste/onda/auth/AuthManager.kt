@@ -45,42 +45,68 @@ class AuthManager(private val context: Context) {
     val spotifyAvailable: Boolean get() = spotifyClientId.isNotBlank()
     val spotifyLinked: Boolean get() = !prefs.getString("spotify_token", null).isNullOrBlank()
     val spotifyEmail: String? get() = prefs.getString("spotify_email", null)
+    val spotifyCookiesAvailable: Boolean get() = !prefs.getString("spotify_sp_dc", null).isNullOrBlank()
 
     fun spotifyAccessToken(): String? = prefs.getString("spotify_token", null)
 
-    /** Devuelve un token válido, renovándolo con el refresh token si ha caducado. */
+    /** Devuelve un token válido: renueva con OAuth o, si no hay Client ID, con las cookies web. */
     suspend fun validSpotifyToken(): String? {
         val token = spotifyAccessToken() ?: return null
         val expiresAt = prefs.getLong("spotify_expires_at", 0L)
         if (expiresAt - System.currentTimeMillis() > 60_000) return token
-        val refresh = prefs.getString("spotify_refresh_token", null) ?: return token
-        return withContext(Dispatchers.IO) {
-            val body = FormBody.Builder()
-                .add("grant_type", "refresh_token")
-                .add("refresh_token", refresh)
-                .add("client_id", spotifyClientId)
+        prefs.getString("spotify_refresh_token", null)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { refreshToken -> refreshSpotifyWithOAuth(refreshToken) }
+            ?.let { return it }
+        val spDc = prefs.getString("spotify_sp_dc", null)
+        if (!spDc.isNullOrBlank()) {
+            refreshSpotifyWithCookies(spDc, prefs.getString("spotify_sp_key", null).orEmpty())
+                ?.let { return it }
+        }
+        return token
+    }
+
+    private suspend fun refreshSpotifyWithOAuth(refreshToken: String): String? = withContext(Dispatchers.IO) {
+        val body = FormBody.Builder()
+            .add("grant_type", "refresh_token")
+            .add("refresh_token", refreshToken)
+            .add("client_id", spotifyClientId)
+            .build()
+        try {
+            val request = Request.Builder()
+                .url("https://accounts.spotify.com/api/token")
+                .post(body)
                 .build()
-            try {
-                val request = Request.Builder()
-                    .url("https://accounts.spotify.com/api/token")
-                    .post(body)
-                    .build()
-                client.newCall(request).execute().use { response ->
-                    val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
-                    val fresh = json?.optString("access_token").orEmpty()
-                    if (!response.isSuccessful || fresh.isBlank()) return@withContext token
-                    prefs.edit {
-                        putString("spotify_token", fresh)
-                        putLong(
-                            "spotify_expires_at",
-                            System.currentTimeMillis() + (json?.optLong("expires_in", 3600L) ?: 3600L) * 1000
-                        )
-                    }
-                    fresh
-                }
-            } catch (e: Exception) {
-                token
+            client.newCall(request).execute().use { response ->
+                val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                val fresh = json?.optString("access_token").orEmpty()
+                if (!response.isSuccessful || fresh.isBlank()) return@withContext null
+                saveSpotifyToken(fresh, System.currentTimeMillis() + (json?.optLong("expires_in", 3600L) ?: 3600L) * 1000)
+                fresh
             }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private suspend fun refreshSpotifyWithCookies(
+        spDc: String,
+        spKey: String,
+    ): String? =
+        SpotifyWebAuth.fetchAccessToken(spDc, spKey)
+            .getOrNull()
+            ?.let { token ->
+                saveSpotifyToken(token.accessToken, token.expiresAtMillis)
+                token.accessToken
+            }
+
+    private fun saveSpotifyToken(
+        token: String,
+        expiresAt: Long,
+    ) {
+        prefs.edit {
+            putString("spotify_token", token)
+            putLong("spotify_expires_at", expiresAt)
         }
     }
 
@@ -256,6 +282,23 @@ class AuthManager(private val context: Context) {
         }
     }
 
+    /** Conecta con las cookies del reproductor web (mismo flujo que ArchiveTune). */
+    suspend fun connectSpotifyWithCookies(
+        spDc: String,
+        spKey: String,
+    ): Result<String> =
+        SpotifyWebAuth.fetchAccessToken(spDc, spKey).map { token ->
+            prefs.edit {
+                putString("spotify_sp_dc", spDc)
+                if (spKey.isBlank()) remove("spotify_sp_key") else putString("spotify_sp_key", spKey)
+                remove("spotify_refresh_token")
+                remove("spotify_verifier")
+                remove("spotify_state")
+            }
+            saveSpotifyToken(token.accessToken, token.expiresAtMillis)
+            token.accessToken
+        }
+
     fun saveSpotifyProfile(email: String, displayName: String) {
         prefs.edit {
             putString("spotify_email", email.ifBlank { displayName })
@@ -269,6 +312,8 @@ class AuthManager(private val context: Context) {
             remove("spotify_refresh_token")
             remove("spotify_expires_at")
             remove("spotify_email")
+            remove("spotify_sp_dc")
+            remove("spotify_sp_key")
             remove("spotify_verifier")
             remove("spotify_state")
         }

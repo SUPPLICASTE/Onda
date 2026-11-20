@@ -1,7 +1,5 @@
 package com.supplicaste.onda.ui.login
 
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.supplicaste.onda.ui.OndaViewModel
@@ -40,16 +37,7 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val context = LocalContext.current
-
-    fun openSpotify() {
-        val url = vm.spotifyAuthUrl()
-        if (url != null) {
-            CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
-        } else {
-            vm.showMessage("Abre Tu perfil y guarda tu Spotify Client ID; registra ondaoauth://spotify/callback en Spotify")
-        }
-    }
+    var showSpotifyLogin by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -95,7 +83,7 @@ fun LoginScreen(
         Spacer(Modifier.height(16.dp))
 
         Button(
-            onClick = { openSpotify() },
+            onClick = { showSpotifyLogin = true },
             enabled = !loading,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = OndaAccent, contentColor = Color.Black)
@@ -113,15 +101,27 @@ fun LoginScreen(
             style = MaterialTheme.typography.bodySmall,
             color = Color.White.copy(alpha = 0.7f)
         )
-        if (!spotifyAvailable) {
-            Text(
-                "Spotify listo para configurar: abre Tu perfil y guarda tu Client ID (o usa ONDA_SPOTIFY_CLIENT_ID).",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f)
-            )
-        }
+        Text(
+            if (spotifyAvailable) {
+                "Si ya tienes un Client ID de Spotify, puedes usar OAuth desde Tu perfil."
+            } else {
+                "No necesitas Client ID: inicia sesión con tu cuenta de Spotify en la ventana que se abre."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.6f)
+        )
         if (message.isNotBlank()) {
             Text(message, style = MaterialTheme.typography.bodySmall, color = Color.White)
         }
+    }
+
+    if (showSpotifyLogin) {
+        SpotifyLoginSheet(
+            onDismiss = { showSpotifyLogin = false },
+            onCookiesCaptured = { spDc, spKey ->
+                showSpotifyLogin = false
+                vm.connectSpotifyWithCookies(spDc, spKey)
+            }
+        )
     }
 }
