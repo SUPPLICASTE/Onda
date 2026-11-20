@@ -5,7 +5,7 @@
 **Onda** es una app de música para Android, inspirada en la interfaz de Spotify, sin anuncios. Permite buscar canciones, crear álbumes, compartirlos con amigos mediante QR, activar un DJ que sugiere la siguiente canción según lo que escuchas e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
 
 - **Paquete:** `com.supplicaste.onda`
-- **Versión:** 1.0.0 (`versionCode 2`)
+- **Versión:** 1.0.1 (`versionCode 3`)
 - **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM
 - **Distribución:** GitHub Releases (APK firmado)
 
