@@ -27,8 +27,14 @@ function Read-Plain([string]$prompt) {
 }
 
 function Read-Hidden([string]$prompt) {
-    $value = Read-Host -Prompt $prompt -MaskInput
-    return $value.Trim()
+    # -MaskInput solo existe en PowerShell 7; -AsSecureString funciona en 5.1 y 7.
+    $secure = Read-Host -Prompt $prompt -AsSecureString
+    $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim()
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
 }
 
 Write-Host ''

@@ -5,7 +5,7 @@
 **Onda** es un reproductor de música para Android con interfaz oscura inspirada en los patrones habituales de los reproductores modernos, sin anuncios. Permite buscar canciones, marcar **Me gusta**, crear álbumes y playlists, compartirlos por QR, reproducir en segundo plano con controles multimedia, activar un DJ que sugiere la siguiente canción e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
 
 - **Paquete:** `com.supplicaste.onda`
-- **Versión:** 1.1.5 (`versionCode 9`)
+- **Versión:** 1.1.6 (`versionCode 10`)
 - **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM + Room + Media3 + NewPipeExtractor
 
 ---
@@ -150,8 +150,8 @@ Secrets: `ONDA_KEYSTORE_BASE64`, `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ON
 Nueva versión:
 
 ```powershell
-git tag v1.1.5
-git push origin v1.1.3
+git tag v1.1.6
+git push origin v1.1.6
 ```
 
 ---
@@ -164,6 +164,7 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
+- ✅ v1.1.6 preparada: asistente de credenciales compatible con PowerShell 5.1 y 7; se publica al configurar Firebase/Google/Spotify.
 - ✅ Compilan debug y release de v1.1.5 (YouTube, refresh de Spotify, secretos en CI y registro completo).
 - ✅ Release firmada y generada por GitHub Actions.
 - ⏳ Pruebas en dispositivo físico: streams reales, notificación en segundo plano y permiso de instalación.
