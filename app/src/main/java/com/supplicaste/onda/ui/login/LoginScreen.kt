@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,18 +45,21 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var wantYouTube by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val googleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            val token = try {
-                AuthManager(context).googleTokenFrom(result.data)
+            val (token, code) = try {
+                AuthManager(context).googleTokenAndCode(result.data)
             } catch (e: Exception) {
-                null
+                null to null
             }
-            if (token != null) vm.signInWithGoogleToken(token)
+            if (token != null) {
+                vm.signInWithGoogleToken(token, if (wantYouTube) code else null)
+            }
         }
     }
 
@@ -122,7 +124,8 @@ fun LoginScreen(
 
         Button(
             onClick = {
-                val intent = vm.googleSignInIntent()
+                wantYouTube = false
+                val intent = vm.googleSignInIntent(false)
                 if (intent != null) {
                     googleLauncher.launch(intent)
                 } else {
@@ -133,11 +136,19 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth()
         ) { Text("Continuar con Google") }
 
-        OutlinedButton(
-            onClick = {},
-            enabled = false,
+        Button(
+            onClick = {
+                wantYouTube = true
+                val intent = vm.googleSignInIntent(true)
+                if (intent != null) {
+                    googleLauncher.launch(intent)
+                } else {
+                    vm.showMessage("Configura Firebase, ONDA_GOOGLE_WEB_CLIENT_ID y ONDA_GOOGLE_CLIENT_SECRET para YouTube")
+                }
+            },
+            enabled = !loading,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("YouTube · Próximamente") }
+        ) { Text("Continuar con YouTube") }
 
         Spacer(Modifier.height(12.dp))
 

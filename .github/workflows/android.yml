@@ -44,6 +44,14 @@ jobs:
           ls -l app/onda-release.keystore
 
       - name: Build debug APK
+        env:
+          ONDA_FIREBASE_API_KEY: ${{ secrets.ONDA_FIREBASE_API_KEY }}
+          ONDA_FIREBASE_PROJECT_ID: ${{ secrets.ONDA_FIREBASE_PROJECT_ID }}
+          ONDA_FIREBASE_APP_ID: ${{ secrets.ONDA_FIREBASE_APP_ID }}
+          ONDA_GOOGLE_WEB_CLIENT_ID: ${{ secrets.ONDA_GOOGLE_WEB_CLIENT_ID }}
+          ONDA_GOOGLE_CLIENT_SECRET: ${{ secrets.ONDA_GOOGLE_CLIENT_SECRET }}
+          ONDA_SPOTIFY_CLIENT_ID: ${{ secrets.ONDA_SPOTIFY_CLIENT_ID }}
+          ONDA_SPOTIFY_REDIRECT_URI: ${{ secrets.ONDA_SPOTIFY_REDIRECT_URI }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Build signed release APK
@@ -55,6 +63,10 @@ jobs:
           ONDA_FIREBASE_API_KEY: ${{ secrets.ONDA_FIREBASE_API_KEY }}
           ONDA_FIREBASE_PROJECT_ID: ${{ secrets.ONDA_FIREBASE_PROJECT_ID }}
           ONDA_FIREBASE_APP_ID: ${{ secrets.ONDA_FIREBASE_APP_ID }}
+          ONDA_GOOGLE_WEB_CLIENT_ID: ${{ secrets.ONDA_GOOGLE_WEB_CLIENT_ID }}
+          ONDA_GOOGLE_CLIENT_SECRET: ${{ secrets.ONDA_GOOGLE_CLIENT_SECRET }}
+          ONDA_SPOTIFY_CLIENT_ID: ${{ secrets.ONDA_SPOTIFY_CLIENT_ID }}
+          ONDA_SPOTIFY_REDIRECT_URI: ${{ secrets.ONDA_SPOTIFY_REDIRECT_URI }}
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Verify release signature

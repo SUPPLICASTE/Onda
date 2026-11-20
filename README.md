@@ -5,7 +5,7 @@
 **Onda** es un reproductor de música para Android con interfaz oscura inspirada en los patrones habituales de los reproductores modernos, sin anuncios. Permite buscar canciones, marcar **Me gusta**, crear álbumes y playlists, compartirlos por QR, reproducir en segundo plano con controles multimedia, activar un DJ que sugiere la siguiente canción e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
 
 - **Paquete:** `com.supplicaste.onda`
-- **Versión:** 1.1.4 (`versionCode 8`)
+- **Versión:** 1.1.5 (`versionCode 9`)
 - **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM + Room + Media3 + NewPipeExtractor
 
 ---
@@ -19,7 +19,8 @@
 | Registro con correo | ✅ | Firebase Auth si hay credenciales; modo local si no las hay |
 | Acceso con Google | ✅ | Google Sign-In + Firebase Auth; aviso claro si faltan credenciales |
 | Acceso con Spotify | ✅ | OAuth 2.0 con PKCE: registra o vincula después desde Tu perfil e importa tus playlists con carátula, título, artista y duración |
-| Audio de Spotify | ✅ | Se buscan en YouTube las canciones importadas para poder reproducirlas sin Premium |
+| Audio de Spotify | ✅ | Se buscan en YouTube las canciones importadas para poder reproducirlas sin Premium; el token se renueva solo |
+| Acceso con YouTube | ✅ | Google Sign-In con permiso `youtube.readonly`: importa tus playlists y vídeos propios; también se puede hacer desde Tu perfil |
 | Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube); **tocar un resultado lo reproduce**; "Mejor resultado", filtros Canciones/Artistas e **historial visible con borrado individual** |
 | Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano, notificación multimedia, **avance automático al terminar** y **pausa/reanude por foco de audio** |
 | **Me gusta** | ✅ | Botón en cada canción, playlist especial "Me gusta" y **"Reproducir todo" reproduce la playlist completa** |
@@ -72,6 +73,14 @@ onda.google.webClientId=123456789-abcdef.apps.googleusercontent.com
 
 O la variable `ONDA_GOOGLE_WEB_CLIENT_ID`. Sin él, el botón muestra un aviso con lo que falta.
 
+Para importar tus playlists de YouTube, añade también el **Client Secret** del mismo Web Client ID (solo se guarda como variable de build, nunca en el código):
+
+```properties
+onda.google.clientSecret=tu-client-secret
+```
+
+O la variable `ONDA_GOOGLE_CLIENT_SECRET`. Se solicita el permiso `youtube.readonly`.
+
 Para Spotify, crea una app en el [Dashboard de desarrolladores](https://developer.spotify.com/dashboard), añade el Redirect URI `ondaoauth://spotify/callback` y configura:
 
 ```properties
@@ -80,7 +89,9 @@ onda.spotify.clientId=tu-client-id
 onda.spotify.redirectUri=ondaoauth://spotify/callback
 ```
 
-O las variables `ONDA_SPOTIFY_CLIENT_ID` / `ONDA_SPOTIFY_REDIRECT_URI`. Se usa PKCE, así que **no hace falta Client Secret**. Sin Client ID, el botón explica qué configurar. YouTube sigue como "Próximamente".
+O las variables `ONDA_SPOTIFY_CLIENT_ID` / `ONDA_SPOTIFY_REDIRECT_URI`. Se usa PKCE, así que **no hace falta Client Secret**. Sin Client ID, el botón explica qué configurar.
+
+GitHub Actions lee estos mismos valores desde secrets: `ONDA_FIREBASE_*`, `ONDA_GOOGLE_WEB_CLIENT_ID`, `ONDA_GOOGLE_CLIENT_SECRET`, `ONDA_SPOTIFY_CLIENT_ID` y `ONDA_SPOTIFY_REDIRECT_URI`.
 
 ---
 
@@ -129,7 +140,7 @@ Secrets: `ONDA_KEYSTORE_BASE64`, `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ON
 Nueva versión:
 
 ```powershell
-git tag v1.1.4
+git tag v1.1.5
 git push origin v1.1.3
 ```
 
@@ -143,6 +154,6 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
-- ✅ Compilan debug y release de v1.1.4 (registro negro, Spotify OAuth/PKCE con importación, vinculación posterior y Google).
+- ✅ Compilan debug y release de v1.1.5 (YouTube, refresh de Spotify, secretos en CI y registro completo).
 - ✅ Release firmada y generada por GitHub Actions.
 - ⏳ Pruebas en dispositivo físico: streams reales, notificación en segundo plano y permiso de instalación.

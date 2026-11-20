@@ -22,13 +22,14 @@ android {
         applicationId = "com.supplicaste.onda"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.1.4"
+        versionCode = 9
+        versionName = "1.1.5"
 
         buildConfigField("String", "FIREBASE_API_KEY", "\"${secret("onda.firebase.apiKey", "ONDA_FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${secret("onda.firebase.projectId", "ONDA_FIREBASE_PROJECT_ID")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${secret("onda.firebase.appId", "ONDA_FIREBASE_APP_ID")}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${secret("onda.google.webClientId", "ONDA_GOOGLE_WEB_CLIENT_ID")}\"")
+        buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${secret("onda.google.clientSecret", "ONDA_GOOGLE_CLIENT_SECRET")}\"")
         buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"${secret("onda.spotify.clientId", "ONDA_SPOTIFY_CLIENT_ID")}\"")
         buildConfigField(
             "String",

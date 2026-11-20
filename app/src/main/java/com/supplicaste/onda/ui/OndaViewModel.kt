@@ -21,6 +21,7 @@ import com.supplicaste.onda.data.OndaRepository
 import com.supplicaste.onda.data.OndaStats
 import com.supplicaste.onda.data.Song
 import com.supplicaste.onda.data.SpotifyImporter
+import com.supplicaste.onda.data.YouTubeImporter
 import com.supplicaste.onda.data.toSong
 import com.supplicaste.onda.player.OndaPlayer
 import com.supplicaste.onda.share.QrCodec
@@ -59,6 +60,7 @@ data class OndaUiState(
     val spotifyAvailable: Boolean = false,
     val spotifyLinked: Boolean = false,
     val spotifyEmail: String? = null,
+    val youtubeLinked: Boolean = false,
     val updateAvailable: String? = null
 )
 
@@ -69,6 +71,7 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     private val repository = OndaRepository(database.dao())
     private val auth = AuthManager(app)
     private val spotify = SpotifyImporter()
+    private val youtube = YouTubeImporter()
     private val prefs = app.getSharedPreferences("onda_prefs", Application.MODE_PRIVATE)
     private var playerListener: Player.Listener? = null
 
@@ -96,7 +99,8 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
             googleAvailable = auth.googleAvailable,
             spotifyAvailable = auth.spotifyAvailable,
             spotifyLinked = auth.spotifyLinked,
-            spotifyEmail = auth.spotifyEmail
+            spotifyEmail = auth.spotifyEmail,
+            youtubeLinked = auth.youtubeLinked
         )
 
         viewModelScope.launch {
@@ -217,15 +221,59 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Devuelve el Intent de Google Sign-In, o null si no hay credenciales configuradas. */
-    fun googleSignInIntent(): Intent? = auth.googleSignInIntent()
+    fun googleSignInIntent(includeYouTube: Boolean = false): Intent? =
+        auth.googleSignInIntent(includeYouTube)
 
-    fun signInWithGoogleToken(token: String) = viewModelScope.launch {
+    fun signInWithGoogleToken(token: String, authCode: String? = null) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, message = "Iniciando sesión con Google…")
         val result = auth.signInWithGoogle(token)
+        if (result.isFailure) {
+            _state.value = _state.value.copy(
+                loading = false,
+                message = "Error: ${result.exceptionOrNull()?.message}"
+            )
+            return@launch
+        }
+        _state.value = _state.value.copy(email = result.getOrNull())
+        if (authCode != null) {
+            _state.value = _state.value.copy(message = "Importando tus playlists de YouTube…")
+            val exchange = auth.exchangeGoogleAuthCode(authCode)
+            if (exchange.isFailure) {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    message = "Sesión iniciada, pero YouTube falló: ${exchange.exceptionOrNull()?.message}"
+                )
+                return@launch
+            }
+            importYouTube(exchange.getOrThrow())
+            return@launch
+        }
         _state.value = _state.value.copy(
             loading = false,
-            email = result.getOrNull(),
-            message = result.fold({ "Sesión iniciada con Google" }, { "Error: ${it.message}" })
+            message = "Sesión iniciada con Google"
+        )
+    }
+
+    /** Importa (o actualiza) las playlists propias de YouTube. */
+    fun importYouTube() = viewModelScope.launch {
+        val token = auth.youtubeAccessToken()
+        if (token == null) {
+            _state.value = _state.value.copy(
+                message = "Entra con YouTube desde el registro para importar tus playlists"
+            )
+            return@launch
+        }
+        importYouTube(token)
+    }
+
+    private suspend fun importYouTube(token: String) {
+        _state.value = _state.value.copy(message = "Leyendo tus playlists de YouTube…")
+        val playlists = youtube.playlists(token)
+        val count = repository.importProvider("YouTube", playlists)
+        _state.value = _state.value.copy(
+            loading = false,
+            youtubeLinked = true,
+            message = "YouTube vinculado: ${playlists.size} playlists y $count vídeos importados"
         )
     }
 
@@ -247,7 +295,7 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Importa (o actualiza) las playlists de Spotify; se usa al conectar y desde Perfil. */
     fun refreshSpotify() = viewModelScope.launch {
-        val token = auth.spotifyAccessToken()
+        val token = auth.validSpotifyToken()
         if (token == null) {
             _state.value = _state.value.copy(message = "Vincula Spotify primero desde Tu perfil")
             return@launch
@@ -295,6 +343,7 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
             authMode = auth.modeLabel,
             googleAvailable = auth.googleAvailable,
             spotifyAvailable = auth.spotifyAvailable,
+            youtubeLinked = false,
             darkTheme = _state.value.darkTheme,
             message = "Sesión cerrada"
         )

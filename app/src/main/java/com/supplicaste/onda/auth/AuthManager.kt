@@ -9,6 +9,7 @@ import androidx.core.content.edit
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.Scope
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
@@ -40,6 +41,45 @@ class AuthManager(private val context: Context) {
 
     fun spotifyAccessToken(): String? = prefs.getString("spotify_token", null)
 
+    /** Devuelve un token válido, renovándolo con el refresh token si ha caducado. */
+    suspend fun validSpotifyToken(): String? {
+        val token = spotifyAccessToken() ?: return null
+        val expiresAt = prefs.getLong("spotify_expires_at", 0L)
+        if (expiresAt - System.currentTimeMillis() > 60_000) return token
+        val refresh = prefs.getString("spotify_refresh_token", null) ?: return token
+        return withContext(Dispatchers.IO) {
+            val body = FormBody.Builder()
+                .add("grant_type", "refresh_token")
+                .add("refresh_token", refresh)
+                .add("client_id", BuildConfig.SPOTIFY_CLIENT_ID)
+                .build()
+            try {
+                val request = Request.Builder()
+                    .url("https://accounts.spotify.com/api/token")
+                    .post(body)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                    val fresh = json?.optString("access_token").orEmpty()
+                    if (!response.isSuccessful || fresh.isBlank()) return@withContext token
+                    prefs.edit {
+                        putString("spotify_token", fresh)
+                        putLong(
+                            "spotify_expires_at",
+                            System.currentTimeMillis() + (json?.optLong("expires_in", 3600L) ?: 3600L) * 1000
+                        )
+                    }
+                    fresh
+                }
+            } catch (e: Exception) {
+                token
+            }
+        }
+    }
+
+    fun youtubeAccessToken(): String? = prefs.getString("youtube_token", null)
+    val youtubeLinked: Boolean get() = !youtubeAccessToken().isNullOrBlank()
+
     private val prefs = context.getSharedPreferences("onda_auth", Context.MODE_PRIVATE)
     private val client = OkHttpClient()
 
@@ -60,19 +100,64 @@ class AuthManager(private val context: Context) {
 
     // ---------- Google ----------
 
-    private fun googleClient(): GoogleSignInClient? {
+    private fun googleClient(includeYouTube: Boolean = false): GoogleSignInClient? {
         if (!googleAvailable) return null
-        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        val builder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
             .requestEmail()
-            .build()
-        return GoogleSignIn.getClient(context, options)
+        if (includeYouTube) {
+            builder.requestScopes(Scope("https://www.googleapis.com/auth/youtube.readonly"))
+            builder.requestServerAuthCode(BuildConfig.GOOGLE_WEB_CLIENT_ID, false)
+        }
+        return GoogleSignIn.getClient(context, builder.build())
     }
 
-    fun googleSignInIntent(): Intent? = googleClient()?.signInIntent
+    fun googleSignInIntent(includeYouTube: Boolean = false): Intent? =
+        googleClient(includeYouTube)?.signInIntent
 
     fun googleTokenFrom(resultIntent: Intent?): String? =
         GoogleSignIn.getSignedInAccountFromIntent(resultIntent).result?.idToken
+
+    /** Devuelve el idToken y, si se pidió, el serverAuthCode para YouTube. */
+    fun googleTokenAndCode(resultIntent: Intent?): Pair<String?, String?> {
+        val account = GoogleSignIn.getSignedInAccountFromIntent(resultIntent).result
+        return account.idToken to account.serverAuthCode
+    }
+
+    /** Canjea el serverAuthCode de Google por un access token para la API de YouTube. */
+    suspend fun exchangeGoogleAuthCode(code: String): Result<String> = withContext(Dispatchers.IO) {
+        if (BuildConfig.GOOGLE_CLIENT_SECRET.isBlank()) {
+            return@withContext Result.failure(
+                IllegalStateException("Configura ONDA_GOOGLE_CLIENT_SECRET para importar YouTube")
+            )
+        }
+        val body = FormBody.Builder()
+            .add("code", code)
+            .add("client_id", BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .add("client_secret", BuildConfig.GOOGLE_CLIENT_SECRET)
+            .add("grant_type", "authorization_code")
+            .build()
+        try {
+            val request = Request.Builder()
+                .url("https://oauth2.googleapis.com/token")
+                .post(body)
+                .build()
+            client.newCall(request).execute().use { response ->
+                val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                val token = json?.optString("access_token").orEmpty()
+                if (!response.isSuccessful || token.isBlank()) {
+                    return@withContext Result.failure(
+                        IllegalStateException(json?.optString("error_description")
+                            ?.takeIf { it.isNotBlank() } ?: "No se pudo autorizar YouTube")
+                    )
+                }
+                prefs.edit { putString("youtube_token", token) }
+                Result.success(token)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     suspend fun signInWithGoogle(token: String): Result<String> {
         if (!configured) return Result.failure(IllegalStateException("Firebase no configurado"))

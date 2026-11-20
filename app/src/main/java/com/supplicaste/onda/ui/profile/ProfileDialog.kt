@@ -92,6 +92,19 @@ fun ProfileDialog(vm: OndaViewModel, onDismiss: () -> Unit) {
                     )
                 }
 
+                Text("YouTube", style = MaterialTheme.typography.titleMedium)
+                if (state.youtubeLinked) {
+                    Text(
+                        "Videos importados en tus playlists",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedButton(
+                    onClick = { vm.importYouTube() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Importar playlists de YouTube") }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically

@@ -202,32 +202,52 @@ class OndaRepository(private val dao: OndaDao) {
         dao.insertPlaylist(PlaylistEntity(name = name.trim().ifBlank { "Nueva playlist" }))
     }
 
-    /** Importa playlists de Spotify como playlists locales; el audio se busca en YouTube al reproducir. */
-    suspend fun importSpotify(playlists: List<SpotifyPlaylist>): Int = withContext(Dispatchers.IO) {
-        var imported = 0
-        playlists.forEach { playlist ->
-            val name = "Spotify · ${playlist.name.take(60)}"
-            val existing = dao.playlistByName(name)
-            val playlistId = existing?.id ?: dao.insertPlaylist(PlaylistEntity(name = name))
-            if (existing != null) dao.clearPlaylist(playlistId)
-            playlist.tracks.forEach { track ->
-                val song = Song(
-                    id = "spotify_${track.id}",
-                    title = track.title,
-                    artist = track.artist,
-                    durationSec = track.durationSec,
-                    artwork = track.artwork,
-                    sourceUrl = "spotify:${track.artist} ${track.title}"
-                )
-                upsert(song)
-                dao.insertPlaylistSong(
-                    PlaylistSongEntity(playlistId, song.id, dao.songsInPlaylistOnce(playlistId).size)
-                )
-                imported++
+    /** Importa playlists de cualquier proveedor como playlists locales. */
+    suspend fun importProvider(prefix: String, playlists: List<ProviderPlaylist>): Int =
+        withContext(Dispatchers.IO) {
+            var imported = 0
+            playlists.forEach { playlist ->
+                val name = "$prefix · ${playlist.name.take(60)}"
+                val existing = dao.playlistByName(name)
+                val playlistId = existing?.id ?: dao.insertPlaylist(PlaylistEntity(name = name))
+                if (existing != null) dao.clearPlaylist(playlistId)
+                playlist.tracks.forEach { track ->
+                    val song = Song(
+                        id = "${prefix.lowercase()}_${track.id}",
+                        title = track.title,
+                        artist = track.artist,
+                        durationSec = track.durationSec,
+                        artwork = track.artwork,
+                        sourceUrl = track.sourceUrl
+                    )
+                    upsert(song)
+                    dao.insertPlaylistSong(
+                        PlaylistSongEntity(playlistId, song.id, dao.songsInPlaylistOnce(playlistId).size)
+                    )
+                    imported++
+                }
             }
+            imported
         }
-        imported
-    }
+
+    suspend fun importSpotify(playlists: List<SpotifyPlaylist>): Int = importProvider(
+        "Spotify",
+        playlists.map { playlist ->
+            ProviderPlaylist(
+                name = playlist.name,
+                tracks = playlist.tracks.map { track ->
+                    ProviderTrack(
+                        id = track.id,
+                        title = track.title,
+                        artist = track.artist,
+                        durationSec = track.durationSec,
+                        artwork = track.artwork,
+                        sourceUrl = "spotify:${track.artist} ${track.title}"
+                    )
+                }
+            )
+        }
+    )
 
     suspend fun renamePlaylist(playlistId: Long, name: String) = withContext(Dispatchers.IO) {
         dao.renamePlaylist(playlistId, name.trim().ifBlank { "Playlist" })
