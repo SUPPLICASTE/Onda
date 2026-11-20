@@ -211,7 +211,7 @@ class OndaRepository(private val dao: OndaDao) {
                 val existing = dao.playlistByName(name)
                 val playlistId = existing?.id ?: dao.insertPlaylist(PlaylistEntity(name = name))
                 if (existing != null) dao.clearPlaylist(playlistId)
-                playlist.tracks.forEach { track ->
+                playlist.tracks.forEachIndexed { position, track ->
                     val song = Song(
                         id = "${prefix.lowercase()}_${track.id}",
                         title = track.title,
@@ -221,9 +221,7 @@ class OndaRepository(private val dao: OndaDao) {
                         sourceUrl = track.sourceUrl
                     )
                     upsert(song)
-                    dao.insertPlaylistSong(
-                        PlaylistSongEntity(playlistId, song.id, dao.songsInPlaylistOnce(playlistId).size)
-                    )
+                    dao.insertPlaylistSong(PlaylistSongEntity(playlistId, song.id, position))
                     imported++
                 }
             }
@@ -235,18 +233,63 @@ class OndaRepository(private val dao: OndaDao) {
         playlists.map { playlist ->
             ProviderPlaylist(
                 name = playlist.name,
-                tracks = playlist.tracks.map { track ->
-                    ProviderTrack(
-                        id = track.id,
-                        title = track.title,
-                        artist = track.artist,
-                        durationSec = track.durationSec,
-                        artwork = track.artwork,
-                        sourceUrl = "spotify:${track.artist} ${track.title}"
-                    )
-                }
+                tracks = playlist.tracks.map { it.toProviderTrack() }
             )
         }
+    )
+
+    /** Traslada las canciones guardadas de Spotify al "Me gusta" de ONDA. */
+    suspend fun importSpotifyLiked(tracks: List<SpotifyTrack>): Int = withContext(Dispatchers.IO) {
+        tracks.forEach { track ->
+            val song = track.toSong()
+            upsert(song)
+            dao.insertLiked(LikedSongEntity(song.id))
+        }
+        tracks.size
+    }
+
+    /** Traslada los álbumes guardados como álbumes locales (los actualiza al repetir). */
+    suspend fun importSpotifyAlbums(albums: List<SpotifyAlbum>): Int = withContext(Dispatchers.IO) {
+        var imported = 0
+        albums.forEach { album ->
+            val name = "Spotify · ${album.name.take(60)}"
+            val albumId = dao.albumByName(name)?.id ?: dao.insertAlbum(AlbumEntity(name = name))
+            dao.clearAlbum(albumId)
+            album.tracks.forEachIndexed { position, track ->
+                val song = track.toSong()
+                upsert(song)
+                dao.insertAlbumSong(AlbumSongEntity(albumId, song.id, position))
+                imported++
+            }
+        }
+        imported
+    }
+
+    /** Crea una playlist con una canción destacada de cada artista seguido. */
+    suspend fun importSpotifyArtists(tracks: List<SpotifyTrack>): Int {
+        if (tracks.isEmpty()) return 0
+        return importProvider(
+            "Spotify",
+            listOf(ProviderPlaylist("Artistas seguidos", tracks.map { it.toProviderTrack() }))
+        )
+    }
+
+    private fun SpotifyTrack.toSong() = Song(
+        id = "spotify_$id",
+        title = title,
+        artist = artist,
+        durationSec = durationSec,
+        artwork = artwork,
+        sourceUrl = "spotify:$artist $title"
+    )
+
+    private fun SpotifyTrack.toProviderTrack() = ProviderTrack(
+        id = id,
+        title = title,
+        artist = artist,
+        durationSec = durationSec,
+        artwork = artwork,
+        sourceUrl = "spotify:$artist $title"
     )
 
     suspend fun renamePlaylist(playlistId: Long, name: String) = withContext(Dispatchers.IO) {

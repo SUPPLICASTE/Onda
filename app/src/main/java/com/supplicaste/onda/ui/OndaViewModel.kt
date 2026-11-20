@@ -329,8 +329,9 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
         importFromSpotify(token)
     }
 
+    /** Traslada toda la biblioteca de Spotify: playlists, favoritos, álbumes y artistas. */
     private suspend fun importFromSpotify(token: String) {
-        _state.value = _state.value.copy(message = "Leyendo tus playlists de Spotify…")
+        _state.value = _state.value.copy(message = "Leyendo tu cuenta de Spotify…")
         val profile = spotify.profile(token)
         if (profile == null) {
             _state.value = _state.value.copy(
@@ -339,16 +340,34 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
             )
             return
         }
+        // La sesión queda abierta aunque luego falle alguna sección de la biblioteca.
         auth.saveSpotifyProfile(profile.email, profile.displayName)
+
+        _state.value = _state.value.copy(message = "Importando tus playlists de Spotify…")
         val playlists = spotify.playlists(token)
-        val count = repository.importSpotify(playlists)
+        val playlistSongs = repository.importSpotify(playlists)
+
+        _state.value = _state.value.copy(message = "Importando tus canciones guardadas…")
+        val liked = spotify.likedTracks(token)
+        val likedSongs = repository.importSpotifyLiked(liked)
+
+        _state.value = _state.value.copy(message = "Importando tus álbumes de Spotify…")
+        val albums = spotify.savedAlbums(token)
+        val albumSongs = repository.importSpotifyAlbums(albums)
+
+        _state.value = _state.value.copy(message = "Importando tus artistas seguidos…")
+        val (artists, artistTracks) = spotify.followedArtists(token)
+        val artistSongs = repository.importSpotifyArtists(artistTracks)
+
+        val total = playlistSongs + likedSongs + albumSongs + artistSongs
         _state.value = _state.value.copy(
             loading = false,
             email = auth.currentEmail(),
             authMode = auth.modeLabel,
             spotifyLinked = true,
             spotifyEmail = profile.email.ifBlank { profile.displayName },
-            message = "Spotify vinculado: ${playlists.size} playlists y $count canciones importadas"
+            message = "Spotify importado: ${playlists.size} playlists, $likedSongs en Me gusta, " +
+                "${albums.size} álbumes, ${artists.size} artistas y $total canciones"
         )
     }
 

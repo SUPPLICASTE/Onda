@@ -22,8 +22,8 @@ android {
         applicationId = "com.supplicaste.onda"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "1.1.9"
+        versionCode = 14
+        versionName = "1.2.0"
 
         buildConfigField("String", "FIREBASE_API_KEY", "\"${secret("onda.firebase.apiKey", "ONDA_FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${secret("onda.firebase.projectId", "ONDA_FIREBASE_PROJECT_ID")}\"")

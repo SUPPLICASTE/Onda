@@ -17,7 +17,7 @@
 | Interfaz tipo reproductor moderno | ✅ | Tema oscuro con acento verde, navegación inferior, biblioteca con carátulas reales, mini-reproductor flotante y barra superior con perfil |
 | Sin anuncios | ✅ | Ningún SDK publicitario |
 | Registro con correo / Gmail | ✅ | Modo local: el correo se guarda solo en este dispositivo |
-| Acceso con Spotify | ✅ | Inicia sesión con tu cuenta en un `WebView` integrado (sin Client ID) u OAuth 2.0 con PKCE si tienes uno; importa tus playlists con carátula, título, artista y duración |
+| Acceso con Spotify | ✅ | Inicia sesión con tu cuenta en un `WebView` integrado (sin Client ID) u OAuth 2.0 con PKCE si tienes uno, y **traslada toda tu biblioteca**: playlists, "Me gusta", álbumes guardados y artistas seguidos |
 | Audio de Spotify | ✅ | Se buscan en YouTube las canciones importadas para poder reproducirlas sin Premium; el token se renueva solo |
 | Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube); **tocar un resultado lo reproduce**; "Mejor resultado", filtros Canciones/Artistas e **historial visible con borrado individual** |
 | Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano, notificación multimedia, **avance automático al terminar** y **pausa/reanude por foco de audio** |
@@ -49,7 +49,16 @@
 
 ## Acceso con Spotify
 
-El botón **Continuar con Spotify** abre una ventana de Spotify dentro de la app, captura las cookies de sesión (`sp_dc`/`sp_key`) y obtiene el token del reproductor web. **No hay que configurar nada**: funciona con tu usuario y contraseña de Spotify y guarda la sesión solo en este dispositivo. Este mecanismo es el mismo que usa ArchiveTune y depende de endpoints internos y de un secreto TOTP publicado por la comunidad, así que puede dejar de funcionar si Spotify cambia su reproductor web.
+El botón **Continuar con Spotify** abre una ventana de Spotify dentro de la app, captura las cookies de sesión (`sp_dc`/`sp_key`) y obtiene el token del reproductor web. **No hay que configurar nada**: funciona con tu usuario y contraseña de Spotify y guarda la sesión solo en este dispositivo. Al entrar se importan automáticamente:
+
+- **Playlists** (hasta 100, con todas sus canciones).
+- **Canciones guardadas** → el "Me gusta" de ONDA (con respaldo GraphQL si la REST no responde).
+- **Álbumes guardados** → álbumes de ONDA con sus canciones.
+- **Artistas seguidos** → playlist "Spotify · Artistas seguidos" con una canción destacada de cada uno.
+
+Las canciones se guardan con carátula, título, artista y duración; el audio se busca en YouTube al reproducir. Volver a importar actualiza las listas sin duplicarlas.
+
+Este mecanismo es el mismo que usa ArchiveTune y depende de endpoints internos y de un secreto TOTP publicado por la comunidad, así que puede dejar de funcionar si Spotify cambia su reproductor web.
 
 Si lo prefieres, puedes usar el flujo oficial **OAuth 2.0 con PKCE** desde **Tu perfil → Usar OAuth con Client ID**. Para ello:
 
@@ -74,7 +83,7 @@ Ejecuta el asistente; te pide el Client ID y el redirect, escribe `local.propert
 .\scripts\configure-onda.ps1
 ```
 
-Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.1.9` para publicar el APK con Spotify activado.
+Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.2.0` para publicar el APK con Spotify activado.
 
 ---
 
@@ -137,6 +146,7 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
+- ✅ v1.2.0: importación completa de la biblioteca de Spotify (playlists, Me gusta, álbumes y artistas seguidos) al iniciar sesión.
 - ✅ v1.1.9: corregido el acceso con cuenta web de Spotify (headers del reproductor y perfil por GraphQL de respaldo).
 - ✅ v1.1.8: inicio de sesión con cuenta web de Spotify sin Client ID (flujo ArchiveTune), renovación por cookies y OAuth PKCE como alternativa.
 - ✅ v1.1.7: acceso social reducido a Spotify; registro por correo/Gmail en modo local; asistente compatible con PowerShell 5.1 y 7.

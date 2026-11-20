@@ -99,6 +99,9 @@ interface OndaDao {
     @Query("SELECT * FROM playlists WHERE name = :name LIMIT 1")
     suspend fun playlistByName(name: String): PlaylistEntity?
 
+    @Query("SELECT * FROM albums WHERE name = :name LIMIT 1")
+    suspend fun albumByName(name: String): AlbumEntity?
+
     @Query("SELECT s.* FROM songs s INNER JOIN album_songs a ON a.songId = s.id WHERE a.albumId = :albumId ORDER BY a.position")
     fun songsInAlbum(albumId: Long): Flow<List<SongEntity>>
 
