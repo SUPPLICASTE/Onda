@@ -135,8 +135,8 @@ Se ejecuta en `push` a `main`, en tags `v*`, en `pull_request` y manualmente (`w
 Para publicar una versión nueva:
 
 ```powershell
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.0.2
+git push origin v1.0.2
 ```
 
 El workflow compilará y creará el Release automáticamente.
@@ -148,4 +148,5 @@ El workflow compilará y creará el Release automáticamente.
 - ✅ Debug y release compilados correctamente (20/11/2026).
 - ✅ Release firmada y verificada con `apksigner`.
 - ✅ Workflow de GitHub Actions configurado con secretos de firma.
+- ✅ Release `v1.0.1` generado íntegramente por Actions (13/13 pasos en verde).
 - ⏳ Pruebas en dispositivo físico pendientes (búsqueda real, streams, permiso de instalación).
