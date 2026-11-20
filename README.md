@@ -52,11 +52,11 @@
 El botón **Continuar con Spotify** abre una ventana de Spotify dentro de la app, captura las cookies de sesión (`sp_dc`/`sp_key`) y obtiene el token del reproductor web. **No hay que configurar nada**: funciona con tu usuario y contraseña de Spotify y guarda la sesión solo en este dispositivo. Al entrar se importan automáticamente:
 
 - **Playlists** (hasta 100, con todas sus canciones).
-- **Canciones guardadas** → el "Me gusta" de ONDA (con respaldo GraphQL si la REST no responde).
+- **Canciones guardadas** → el "Me gusta" de ONDA.
 - **Álbumes guardados** → álbumes de ONDA con sus canciones.
 - **Artistas seguidos** → playlist "Spotify · Artistas seguidos" con una canción destacada de cada uno.
 
-Las canciones se guardan con carátula, título, artista y duración; el audio se busca en YouTube al reproducir. Volver a importar actualiza las listas sin duplicarlas.
+Las canciones se guardan con carátula, título, artista y duración; el audio se busca en YouTube al reproducir. Volver a importar actualiza las listas sin duplicarlas. La lectura se hace por las consultas internas del reproductor web (GraphQL), porque los endpoints REST devuelven 429 con ese token; los hashes se actualizan desde un registro público.
 
 Este mecanismo es el mismo que usa ArchiveTune y depende de endpoints internos y de un secreto TOTP publicado por la comunidad, así que puede dejar de funcionar si Spotify cambia su reproductor web.
 
@@ -83,7 +83,7 @@ Ejecuta el asistente; te pide el Client ID y el redirect, escribe `local.propert
 .\scripts\configure-onda.ps1
 ```
 
-Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.2.0` para publicar el APK con Spotify activado.
+Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.2.1` para publicar el APK con Spotify activado.
 
 ---
 
@@ -146,6 +146,7 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
+- ✅ v1.2.1: corregida la importación de Me gusta y álbumes (lectura por GraphQL del reproductor web, sin límites REST).
 - ✅ v1.2.0: importación completa de la biblioteca de Spotify (playlists, Me gusta, álbumes y artistas seguidos) al iniciar sesión.
 - ✅ v1.1.9: corregido el acceso con cuenta web de Spotify (headers del reproductor y perfil por GraphQL de respaldo).
 - ✅ v1.1.8: inicio de sesión con cuenta web de Spotify sin Client ID (flujo ArchiveTune), renovación por cookies y OAuth PKCE como alternativa.

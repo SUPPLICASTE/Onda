@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 data class SpotifyProfile(
     val id: String,
@@ -51,220 +52,281 @@ data class SpotifyLibrary(
 )
 
 /**
- * Lee el perfil y la biblioteca de Spotify.
+ * Lee la biblioteca usando las mismas consultas que el reproductor web.
  *
- * El token del reproductor web solo funciona si se envían los mismos headers
- * que la web de Spotify. Para las canciones guardadas se usa la API GraphQL
- * interna como respaldo, igual que hace ArchiveTune.
+ * Los endpoints REST de api.spotify.com responden 429 al token del reproductor
+ * web, así que playlists, favoritos, álbumes y artistas se leen por GraphQL
+ * (`api-partner.spotify.com`). Los hashes se actualizan desde un registro
+ * público; si no hay red se usan los valores incluidos.
  */
 class SpotifyImporter {
-    private val client = OkHttpClient()
+    private val client =
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(40, TimeUnit.SECONDS)
+            .build()
 
-    private fun request(url: String, token: String): Request.Builder =
+    private fun baseRequest(url: String, token: String? = null): Request.Builder =
         Request.Builder()
             .url(url)
-            .header("Authorization", "Bearer $token")
             .header("User-Agent", USER_AGENT)
             .header("app-platform", "WebPlayer")
             .header("Origin", "https://open.spotify.com")
             .header("Referer", "https://open.spotify.com/")
             .header("Accept", "application/json")
             .header("Accept-Language", "en")
+            .apply { if (token != null) header("Authorization", "Bearer $token") }
 
-    private fun getJson(url: String, token: String): JSONObject? = runCatching {
-        client.newCall(request(url, token).build()).execute().use { response ->
+    private fun getJson(url: String, token: String? = null): JSONObject? = runCatching {
+        client.newCall(baseRequest(url, token).build()).execute().use { response ->
             if (!response.isSuccessful) return null
             runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
         }
     }.getOrNull()
 
-    /** Perfil por REST; si falla, se consulta GraphQL (`profileAttributes`). */
+    /** Perfil por GraphQL; si falla, se intenta la REST clásica. */
     suspend fun profile(token: String): SpotifyProfile? = withContext(Dispatchers.IO) {
-        val json = getJson("https://api.spotify.com/v1/me", token)
-        if (json != null) {
-            val id = json.optString("id")
-            val name = json.optString("display_name")
-            if (id.isNotBlank() || name.isNotBlank()) {
-                return@withContext SpotifyProfile(
-                    id = id,
-                    email = json.optString("email"),
-                    displayName = name.ifBlank { id }
-                )
-            }
-        }
         val response = gqlPost(token, "profileAttributes", JSONObject())
-            ?: return@withContext null
-        val data = response.optJSONObject("data")?.optJSONObject("me")?.optJSONObject("profile")
-            ?: return@withContext null
-        val id = data.optString("uri").substringAfterLast(":")
-        val name = data.optString("name").ifBlank { id }
+        val data = response?.at("data")?.at("me")?.at("profile")
+        if (data != null) {
+            val uri = data.optString("uri")
+            val id = uri.substringAfterLast(":").ifBlank { data.optString("id") }
+            val name = data.optString("name")
+                .ifBlank { data.optString("username") }
+                .ifBlank { id }
+            if (id.isNotBlank() || name.isNotBlank()) {
+                return@withContext SpotifyProfile(id = id, email = "", displayName = name)
+            }
+        }
+        val json = getJson("https://api.spotify.com/v1/me", token)
+        val id = json?.optString("id").orEmpty()
+        val name = json?.optString("display_name").orEmpty()
         if (id.isBlank() && name.isBlank()) return@withContext null
-        SpotifyProfile(id = id, email = "", displayName = name)
+        SpotifyProfile(id, json?.optString("email").orEmpty(), name.ifBlank { id })
     }
 
-    /** Playlists del usuario (todas las páginas, sin el límite anterior de 20). */
+    /** Todas las playlists del usuario, con todas sus canciones. */
     suspend fun playlists(token: String): List<SpotifyPlaylist> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<SpotifyPlaylist>()
-        var next: String? = "https://api.spotify.com/v1/me/playlists?limit=50"
-        while (next != null && result.size < MAX_PLAYLISTS) {
-            val page = getJson(next, token) ?: break
-            val items = page.optJSONArray("items") ?: break
-            for (i in 0 until items.length()) {
-                val item = items.optJSONObject(i) ?: continue
-                val name = item.optString("name").ifBlank { "Playlist de Spotify" }
-                val href = item.optJSONObject("tracks")?.optString("href").orEmpty()
-                val tracks = if (href.isNotBlank()) pagedTracks(href, token, wrapped = true) else emptyList()
-                result.add(SpotifyPlaylist(name, tracks))
-            }
-            next = page.opt("next") as? String
+        libraryItems(token, "Playlists", MAX_PLAYLISTS).mapNotNull { wrapper ->
+            val data = wrapper.at("data") ?: return@mapNotNull null
+            val uri = wrapper.optString("_uri").ifBlank { data.optString("uri") }
+            val id = uri.substringAfterLast(":")
+            if (id.isBlank()) return@mapNotNull null
+            val name = data.optString("name").ifBlank { "Playlist de Spotify" }
+            SpotifyPlaylist(name, playlistTracks(token, id))
         }
-        result
     }
 
-    /** Canciones de "Me gusta": REST y, si falla, GraphQL (`fetchLibraryTracks`). */
+    /** Canciones de "Me gusta" (`fetchLibraryTracks`). */
     suspend fun likedTracks(token: String): List<SpotifyTrack> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<SpotifyTrack>()
-        var next: String? = "https://api.spotify.com/v1/me/tracks?limit=50"
-        while (next != null && result.size < MAX_LIKED) {
-            val page = getJson(next, token) ?: break
-            val items = page.optJSONArray("items") ?: break
-            for (i in 0 until items.length()) {
-                parseTrack(items.optJSONObject(i)?.optJSONObject("track"))?.let(result::add)
-            }
-            next = page.opt("next") as? String
-        }
-        if (result.isEmpty()) likedTracksFromGraphql(token) else result
-    }
-
-    private fun likedTracksFromGraphql(token: String): List<SpotifyTrack> {
         val result = mutableListOf<SpotifyTrack>()
         var offset = 0
         while (offset < MAX_LIKED) {
-            val vars = JSONObject().put("offset", offset).put("limit", 50)
-            val response = gqlPost(token, "fetchLibraryTracks", vars) ?: break
-            val tracks = response.optJSONObject("data")
-                ?.optJSONObject("me")?.optJSONObject("library")?.optJSONObject("tracks")
+            val vars = JSONObject().put("offset", offset).put("limit", 100)
+            val tracks = gqlPost(token, "fetchLibraryTracks", vars)
+                ?.at("data")?.at("me")?.at("library")?.at("tracks")
                 ?.optJSONArray("items") ?: break
             var found = 0
             for (i in 0 until tracks.length()) {
-                val wrapper = tracks.optJSONObject(i)?.optJSONObject("track") ?: continue
-                val data = wrapper.optJSONObject("data") ?: continue
+                val wrapper = tracks.optJSONObject(i)?.at("track") ?: continue
+                val data = wrapper.at("data") ?: continue
                 val uri = wrapper.optString("_uri").ifBlank { wrapper.optString("uri") }
                 parseGqlTrack(data, uri)?.let { result.add(it); found++ }
             }
-            if (found == 0 || tracks.length() < 50) break
+            if (found == 0 || tracks.length() < 100) break
             offset += found
         }
-        return result
+        result
     }
 
     /** Álbumes guardados en la biblioteca, con sus canciones. */
     suspend fun savedAlbums(token: String): List<SpotifyAlbum> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<SpotifyAlbum>()
-        var next: String? = "https://api.spotify.com/v1/me/albums?limit=50"
-        while (next != null && result.size < MAX_ALBUMS) {
-            val page = getJson(next, token) ?: break
-            val items = page.optJSONArray("items") ?: break
-            for (i in 0 until items.length()) {
-                val album = items.optJSONObject(i)?.optJSONObject("album") ?: continue
-                val name = album.optString("name").ifBlank { "Álbum de Spotify" }
-                val artist = album.optJSONArray("artists")?.optJSONObject(0)?.optString("name").orEmpty()
-                val artwork = album.optJSONArray("images")?.optJSONObject(0)?.optString("url").orEmpty()
-                val href = album.optJSONObject("tracks")?.optString("href").orEmpty()
-                val tracks = if (href.isNotBlank()) pagedTracks(href, token, wrapped = false) else emptyList()
-                result.add(SpotifyAlbum(name, artist, artwork, tracks))
-            }
-            next = page.opt("next") as? String
+        libraryItems(token, "Albums", MAX_ALBUMS).mapNotNull { wrapper ->
+            val data = wrapper.at("data") ?: return@mapNotNull null
+            val uri = wrapper.optString("_uri").ifBlank { data.optString("uri") }
+            val id = uri.substringAfterLast(":")
+            if (id.isBlank()) return@mapNotNull null
+            val name = data.optString("name").ifBlank { "Álbum de Spotify" }
+            val artist = data.optJSONArray("artists")
+                ?.optJSONObject(0)?.at("profile")?.optString("name").orEmpty()
+                .ifBlank { "Artista desconocido" }
+            val artwork = largestSource(data.at("coverArt")?.optJSONArray("sources"))
+            SpotifyAlbum(name, artist, artwork, albumTracks(token, id, artwork))
         }
-        result
     }
 
     /** Artistas seguidos y una canción destacada de cada uno. */
     suspend fun followedArtists(token: String): Pair<List<SpotifyArtist>, List<SpotifyTrack>> =
         withContext(Dispatchers.IO) {
-            val artists = mutableListOf<SpotifyArtist>()
-            var next: String? = "https://api.spotify.com/v1/me/following?type=artist&limit=50"
-            while (next != null && artists.size < MAX_ARTISTS) {
-                val page = getJson(next, token) ?: break
-                val items = page.optJSONObject("artists")?.optJSONArray("items") ?: break
-                for (i in 0 until items.length()) {
-                    val item = items.optJSONObject(i) ?: continue
-                    val id = item.optString("id")
-                    if (id.isNotBlank()) artists.add(SpotifyArtist(id, item.optString("name")))
-                }
-                next = page.optJSONObject("artists")?.opt("next") as? String
+            val artists = libraryItems(token, "Artists", MAX_ARTISTS).mapNotNull { wrapper ->
+                val data = wrapper.at("data") ?: return@mapNotNull null
+                val uri = wrapper.optString("_uri").ifBlank { data.optString("uri") }
+                val id = uri.substringAfterLast(":")
+                val name = data.at("profile")?.optString("name").orEmpty()
+                if (id.isBlank() || name.isBlank()) null else SpotifyArtist(id, name)
             }
 
             val tracks = mutableListOf<SpotifyTrack>()
             artists.take(MAX_ARTISTS).forEach { artist ->
-                val top = getJson(
-                    "https://api.spotify.com/v1/artists/${artist.id}/top-tracks?limit=3",
-                    token
-                )?.optJSONArray("tracks") ?: return@forEach
-                for (i in 0 until minOf(top.length(), 3)) {
-                    parseTrack(top.optJSONObject(i))?.let(tracks::add)
+                val vars = JSONObject()
+                    .put("searchTerm", artist.name)
+                    .put("offset", 0)
+                    .put("limit", 1)
+                    .put("numberOfTopResults", 1)
+                    .put("includeAudiobooks", false)
+                    .put("includePreReleases", false)
+                    .put("includeAuthors", false)
+                val items = gqlPost(token, "searchTracks", vars)
+                    ?.at("data")?.at("searchV2")?.at("tracksV2")?.optJSONArray("items")
+                    ?: return@forEach
+                for (i in 0 until minOf(items.length(), 1)) {
+                    val wrapper = items.optJSONObject(i)?.at("item") ?: continue
+                    val data = wrapper.at("data") ?: continue
+                    val uri = data.optString("uri").ifBlank { data.optString("_uri") }
+                    parseGqlTrack(data, uri)?.let(tracks::add)
                 }
             }
             artists to tracks
         }
 
-    /** Carga todas las páginas de un endpoint de canciones. */
-    private fun pagedTracks(url: String, token: String, wrapped: Boolean): List<SpotifyTrack> {
-        val result = mutableListOf<SpotifyTrack>()
-        var next: String? = url
-        var pages = 0
-        while (next != null && pages < MAX_TRACK_PAGES && result.size < MAX_TRACKS_PER_LIST) {
-            val page = getJson(next, token) ?: break
-            val items: JSONArray = page.optJSONArray("items") ?: break
+    /** Elementos de la biblioteca (`libraryV3`) de un tipo dado. */
+    private fun libraryItems(token: String, filter: String, max: Int): List<JSONObject> {
+        val result = mutableListOf<JSONObject>()
+        var offset = 0
+        while (offset < max) {
+            val vars = JSONObject()
+                .put("filters", JSONArray().put(filter))
+                .put("order", JSONObject.NULL)
+                .put("textFilter", "")
+                .put(
+                    "features",
+                    JSONArray()
+                        .put("LIKED_SONGS")
+                        .put("YOUR_EPISODES_V2")
+                        .put("PRERELEASES")
+                        .put("EVENTS")
+                )
+                .put("limit", 50)
+                .put("offset", offset)
+                .put("flatten", true)
+                .put("expandedFolders", JSONArray())
+                .put("folderUri", JSONObject.NULL)
+                .put("includeFoldersWhenFlattening", false)
+            val library = gqlPost(token, "libraryV3", vars)
+                ?.at("data")?.at("me")?.at("libraryV3") ?: break
+            val items = library.optJSONArray("items") ?: break
             for (i in 0 until items.length()) {
-                val entry = items.optJSONObject(i) ?: continue
-                val track = if (wrapped) entry.optJSONObject("track") else entry
-                parseTrack(track)?.let(result::add)
+                val wrapper = items.optJSONObject(i)?.at("item") ?: continue
+                result.add(wrapper)
             }
-            next = page.opt("next") as? String
-            pages++
+            if (items.length() < 50) break
+            offset += items.length()
+        }
+        return result.take(max)
+    }
+
+    /** Canciones de una playlist (`fetchPlaylist`). */
+    private fun playlistTracks(token: String, playlistId: String): List<SpotifyTrack> {
+        val result = mutableListOf<SpotifyTrack>()
+        var offset = 0
+        while (result.size < MAX_TRACKS_PER_LIST) {
+            val vars = JSONObject()
+                .put("uri", "spotify:playlist:$playlistId")
+                .put("offset", offset)
+                .put("limit", 100)
+                .put("enableWatchFeedEntrypoint", false)
+            val content = gqlPost(token, "fetchPlaylist", vars)
+                ?.at("data")?.at("playlistV2")?.at("content") ?: break
+            val items = content.optJSONArray("items") ?: break
+            for (i in 0 until items.length()) {
+                val wrapper = items.optJSONObject(i)?.at("itemV2") ?: continue
+                val data = wrapper.at("data") ?: continue
+                val uri = data.optString("uri").ifBlank { data.optString("_uri") }
+                parseGqlTrack(data, uri)?.let(result::add)
+            }
+            val total = content.optInt("totalCount", -1)
+            if (items.length() < 100 || (total >= 0 && offset + items.length() >= total)) break
+            offset += items.length()
         }
         return result
     }
 
-    private fun parseTrack(track: JSONObject?): SpotifyTrack? {
-        if (track == null) return null
-        val id = track.optString("id")
-        if (id.isBlank()) return null
-        val title = track.optString("name").ifBlank { "Sin título" }
-        val artist = track.optJSONArray("artists")
-            ?.optJSONObject(0)?.optString("name").orEmpty().ifBlank { "Artista desconocido" }
-        val duration = track.optLong("duration_ms", 0L) / 1000L
-        val artwork = track.optJSONObject("album")
-            ?.optJSONArray("images")
-            ?.optJSONObject(0)?.optString("url").orEmpty()
-        return SpotifyTrack(id, title, artist, duration, artwork)
+    /** Canciones de un álbum (`getAlbum`). */
+    private fun albumTracks(token: String, albumId: String, cover: String): List<SpotifyTrack> {
+        val result = mutableListOf<SpotifyTrack>()
+        var offset = 0
+        while (result.size < MAX_TRACKS_PER_LIST) {
+            val vars = JSONObject()
+                .put("uri", "spotify:album:$albumId")
+                .put("locale", "")
+                .put("offset", offset)
+                .put("limit", 100)
+            val album = gqlPost(token, "getAlbum", vars)?.at("data")?.at("albumUnion") ?: break
+            val tracksV2 = album.at("tracksV2") ?: break
+            val items = tracksV2.optJSONArray("items") ?: break
+            for (i in 0 until items.length()) {
+                val entry = items.optJSONObject(i) ?: continue
+                val wrapper = entry.at("track") ?: entry.at("itemV2") ?: continue
+                val data = wrapper.at("data") ?: wrapper
+                val uri = data.optString("uri").ifBlank { data.optString("_uri") }
+                    .ifBlank { wrapper.optString("_uri") }
+                parseGqlTrack(data, uri, cover)?.let(result::add)
+            }
+            val total = tracksV2.optInt("totalCount", -1)
+            if (items.length() < 100 || (total >= 0 && offset + items.length() >= total)) break
+            offset += items.length()
+        }
+        return result
     }
 
-    private fun parseGqlTrack(data: JSONObject, uri: String): SpotifyTrack? {
+    private fun parseGqlTrack(
+        data: JSONObject,
+        uri: String,
+        albumArtwork: String = ""
+    ): SpotifyTrack? {
         val id = uri.substringAfterLast(":")
         if (id.isBlank()) return null
         val title = data.optString("name").ifBlank { "Sin título" }
-        val artist = data.optJSONObject("artists")
-            ?.optJSONArray("items")?.optJSONObject(0)
-            ?.optJSONObject("profile")?.optString("name").orEmpty()
+        val artist = data.optJSONArray("artists")
+            ?.optJSONObject(0)?.at("profile")?.optString("name").orEmpty()
             .ifBlank { "Artista desconocido" }
-        val durationMs = data.optJSONObject("duration")?.optLong("totalMilliseconds", 0L)
+        val durationMs = data.at("duration")?.optLong("totalMilliseconds", 0L)
             ?.takeIf { it > 0L }
+            ?: data.at("trackDuration")?.optLong("totalMilliseconds", 0L)
+                ?.takeIf { it > 0L }
             ?: data.optLong("durationMs", 0L)
-        val artwork = data.optJSONObject("albumOfTrack")
-            ?.optJSONObject("coverArt")?.optJSONArray("sources")
-            ?.optJSONObject(0)?.optString("url").orEmpty()
+        val artwork = data.at("albumOfTrack")?.at("coverArt")?.optJSONArray("sources")
+            .let(::largestSource).ifBlank { albumArtwork }
         return SpotifyTrack(id, title, artist, durationMs / 1000L, artwork)
     }
+
+    private fun largestSource(sources: JSONArray?): String {
+        if (sources == null) return ""
+        var best = ""
+        var bestWidth = -1
+        for (i in 0 until sources.length()) {
+            val source = sources.optJSONObject(i) ?: continue
+            val url = source.optString("url")
+            val width = source.optInt("width", 0)
+            if (url.isNotBlank() && width > bestWidth) {
+                best = url
+                bestWidth = width
+            }
+        }
+        return best
+    }
+
+    private fun JSONObject.at(key: String): JSONObject? = this.opt(key) as? JSONObject
 
     /** Consulta GraphQL con una query persistida del reproductor web. */
     private fun gqlPost(
         token: String,
         operationName: String,
         variables: JSONObject,
+        retry: Boolean = true
     ): JSONObject? {
-        val hash = GQL_HASHES[operationName] ?: return null
+        val hash = hashFor(operationName)
+        if (hash.isBlank()) return null
         val body = JSONObject()
             .put("variables", variables)
             .put("operationName", operationName)
@@ -277,30 +339,73 @@ class SpotifyImporter {
             )
             .toString()
             .toRequestBody(JSON_TYPE)
-        return runCatching {
-            client.newCall(request(GQL_URL, token).post(body).build()).execute().use { response ->
-                if (!response.isSuccessful) return null
-                runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+        val response = runCatching {
+            val request = baseRequest(GQL_URL, token).post(body).build()
+            client.newCall(request).execute().use { result ->
+                val text = result.body?.string().orEmpty()
+                if (!result.isSuccessful) return@use null
+                runCatching { JSONObject(text) }.getOrNull()
             }
-        }.getOrNull()
+        }.getOrNull() ?: return null
+
+        val errors = response.optJSONArray("errors")
+        if (errors != null && errors.length() > 0 && retry) {
+            val message = (0 until errors.length()).joinToString { errors.optJSONObject(it)?.optString("message").orEmpty() }
+            if (message.contains("PersistedQueryNotFound", true)) {
+                hashesLoaded = false
+                return gqlPost(token, operationName, variables, retry = false)
+            }
+        }
+        return response.takeIf { it.has("data") }
+    }
+
+    /** Los hashes rotan con cada deploy de Spotify: se leen del registro público. */
+    private fun hashFor(operation: String): String {
+        if (!hashesLoaded) {
+            hashesLoaded = true
+            val json = getJson(HASH_REGISTRY)
+            val operations = json?.optJSONObject("operations")
+            if (operations != null) {
+                val fresh = mutableMapOf<String, String>()
+                val names = operations.keys()
+                while (names.hasNext()) {
+                    val name = names.next()
+                    val hash = operations.optJSONObject(name)?.optString("hash").orEmpty()
+                    if (hash.length == 64) fresh[name] = hash
+                }
+                if (fresh.isNotEmpty()) cachedHashes = fresh + DEFAULT_HASHES
+            }
+        }
+        return cachedHashes[operation].orEmpty()
     }
 
     private companion object {
         const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
         const val GQL_URL = "https://api-partner.spotify.com/pathfinder/v2/query"
+        const val HASH_REGISTRY =
+            "https://raw.githubusercontent.com/Jigen-Ohtsusuki/spotify-gql-registry/main/hashes.json"
         val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
 
         const val MAX_PLAYLISTS = 100
-        const val MAX_TRACK_PAGES = 10
         const val MAX_TRACKS_PER_LIST = 500
         const val MAX_LIKED = 1000
         const val MAX_ALBUMS = 100
         const val MAX_ARTISTS = 30
 
-        val GQL_HASHES = mapOf(
-            "profileAttributes" to "53bcb064f6cd18c23f752bc324a791194d20df612d8e1239c735144ab0399ced",
-            "fetchLibraryTracks" to "087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240"
+        val DEFAULT_HASHES = mapOf(
+            "profileAttributes" to "08ffb4730af3746e04a8301396f20875dbbce10c75243803091a9274eacc8ac0",
+            "libraryV3" to "390c78e5b951029bad359785e69b07b536a509c581cbcd0aded5e5067f187455",
+            "fetchPlaylist" to "21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf",
+            "fetchLibraryTracks" to "087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240",
+            "getAlbum" to "0b6ce3511e1b02e4a40fa95440f992acbe85080eb308af9194322d708fc1914f",
+            "searchTracks" to "b02683192a98dde7966b5e6655a79eeb62713eab703eda9902c932818dd52751"
         )
+
+        @Volatile
+        private var hashesLoaded = false
+
+        @Volatile
+        private var cachedHashes: Map<String, String> = DEFAULT_HASHES
     }
 }
