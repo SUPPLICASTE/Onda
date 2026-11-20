@@ -74,7 +74,7 @@ Ejecuta el asistente; te pide el Client ID y el redirect, escribe `local.propert
 .\scripts\configure-onda.ps1
 ```
 
-Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.1.7` para publicar el APK con Spotify activado.
+Opciones: `-SkipGithub` (solo local) y `-Build` (compila release y verifica firma al terminar). Requiere `gh auth login` previo. Después crea un tag `v1.1.8` para publicar el APK con Spotify activado.
 
 ---
 
@@ -137,6 +137,7 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
+- ✅ v1.1.8: inicio de sesión con cuenta web de Spotify sin Client ID (flujo ArchiveTune), renovación por cookies y OAuth PKCE como alternativa.
 - ✅ v1.1.7: acceso social reducido a Spotify; registro por correo/Gmail en modo local; asistente compatible con PowerShell 5.1 y 7.
 - ✅ Compilan debug y release de v1.1.6 (YouTube, refresh de Spotify, secretos en CI y registro completo).
 - ✅ Release firmada y generada por GitHub Actions.
