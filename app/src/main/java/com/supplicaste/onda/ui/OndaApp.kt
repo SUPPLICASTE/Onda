@@ -94,7 +94,7 @@ fun OndaApp(vm: OndaViewModel = viewModel()) {
         }
 
         if (state.email == null) {
-            LoginScreen(vm = vm, message = state.message, loading = state.loading, mode = state.authMode)
+            LoginScreen(vm = vm, message = state.message, loading = state.loading, mode = state.authMode, googleAvailable = state.googleAvailable)
             return@OndaTheme
         }
 

@@ -4,7 +4,27 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Ola principal: curva continua con terminaciones redondeadas -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M54,30v32.5c-3.3,-2.2 -7.3,-3.5 -11.7,-3.5c-11,0 -19.8,8.8 -19.8,19.7C22.5,88.6 31.3,97.5 42.3,97.5c11,0 19.8,-8.9 19.8,-19.8V47.5h17.5V30H54z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M26,49 C34,37 42,37 50,49 C58,61 66,61 82,45"
+        android:strokeColor="#FF1ED760"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Onda secundaria -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M30,63 C37,55 44,55 51,63 C58,71 65,71 77,61"
+        android:strokeColor="#FF1ED760"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Última onda, más corta -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M39,76 C45,72 51,72 57,76"
+        android:strokeColor="#FF1ED760"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
 </vector>

@@ -188,6 +188,9 @@ interface OndaDao {
 
     @Query("SELECT * FROM history ORDER BY playedAt DESC LIMIT 300")
     suspend fun recentHistory(): List<HistoryEntity>
+
+    @Query("SELECT DISTINCT songId FROM playlist_songs UNION SELECT DISTINCT songId FROM album_songs")
+    suspend fun collectionSongIds(): List<String>
 }
 
 @Database(

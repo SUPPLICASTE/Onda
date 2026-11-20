@@ -5,7 +5,7 @@
 **Onda** es un reproductor de música para Android con interfaz oscura inspirada en los patrones habituales de los reproductores modernos, sin anuncios. Permite buscar canciones, marcar **Me gusta**, crear álbumes y playlists, compartirlos por QR, reproducir en segundo plano con controles multimedia, activar un DJ que sugiere la siguiente canción e instalarse a sí misma desde GitHub Releases sin borrar tus datos.
 
 - **Paquete:** `com.supplicaste.onda`
-- **Versión:** 1.1.2 (`versionCode 6`)
+- **Versión:** 1.1.3 (`versionCode 7`)
 - **Stack:** Kotlin + Jetpack Compose + Material 3 + MVVM + Room + Media3 + NewPipeExtractor
 
 ---
@@ -17,14 +17,15 @@
 | Interfaz tipo reproductor moderno | ✅ | Tema oscuro con acento verde, navegación inferior, biblioteca con carátulas reales, mini-reproductor flotante y barra superior con perfil |
 | Sin anuncios | ✅ | Ningún SDK publicitario |
 | Registro con correo | ✅ | Firebase Auth si hay credenciales; modo local si no las hay |
-| Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube); **tocar un resultado lo reproduce**; "Mejor resultado", filtros Canciones/Artistas y búsquedas recientes |
-| Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano y notificación multimedia |
-| **Me gusta** | ✅ | Botón en cada canción y playlist especial "Me gusta" |
+| Acceso con Google | ✅ | Google Sign-In + Firebase Auth; Spotify y YouTube aparecen como "Próximamente" hasta tener credenciales OAuth |
+| Búsqueda de canciones | ✅ | NewPipeExtractor (YouTube); **tocar un resultado lo reproduce**; "Mejor resultado", filtros Canciones/Artistas e **historial visible con borrado individual** |
+| Reproducción | ✅ | Media3/ExoPlayer, servicio en segundo plano, notificación multimedia, **avance automático al terminar** y **pausa/reanude por foco de audio** |
+| **Me gusta** | ✅ | Botón en cada canción, playlist especial "Me gusta" y **"Reproducir todo" reproduce la playlist completa** |
 | **Pantalla de reproducción** | ✅ | Fondo difuminado, progreso, aleatorio, repetir, cola editable y menú "..." de la canción para añadirla a álbum o playlist |
 | Menú de cada canción | ✅ | Reproducir, reproducir siguiente, Me gusta, añadir a álbum o playlist |
-| Álbumes y playlists | ✅ | Biblioteca en cuadrícula con menú "+", crear, renombrar, borrar, añadir y quitar canciones |
+| Álbumes y playlists | ✅ | Biblioteca en cuadrícula con menú "+", crear, renombrar, borrar, añadir y quitar canciones; **cada canción muestra carátula, título, artista y duración** |
 | Compartir con amigos | ✅ | Código QR (ZXing) **y código de texto copiable/compartible** + campo para importar o escanear |
-| DJ opcional | ✅ | Sugiere la siguiente canción según Me gusta, historial y artistas |
+| DJ opcional | ✅ | Al activarlo encadena músicas afines a la canción actual, tus listas/Me gusta y el artista que suenas |
 | Perfil | ✅ | Correo, estadísticas, tema oscuro/claro, comprobación de updates |
 | Auto-actualizador | ✅ | Consulta `/releases/latest`, descarga el APK y lanza la instalación |
 | Persistencia al actualizar | ✅ | Mismo `applicationId` y misma clave de firma; migración Room v1→v2 |
@@ -39,7 +40,7 @@
 | Catálogo | NewPipeExtractor / YouTube | Grandes listas sin descargar archivos |
 | Registro | Firebase Auth + fallback local | Verificación real sin bloquear el build |
 | Compartir | QR / texto | Sin backend propio |
-| DJ | Local, sin IA externa | Basado en Me gusta e historial |
+| DJ | Local, sin IA externa | Basado en canción actual, colecciones, Me gusta e historial |
 | Reproductor | `MediaSessionService` | Música en segundo plano y controles en notificación |
 | Actualizaciones | Misma firma | Conserva Room (álbumes, Me gusta, listas e historial) al sobrescribir |
 
@@ -60,6 +61,14 @@ onda.firebase.appId=1:123456789:android:abcdef
 ```
 
 También sirven las variables `ONDA_FIREBASE_API_KEY`, `ONDA_FIREBASE_PROJECT_ID` y `ONDA_FIREBASE_APP_ID`.
+
+Para el botón **Continuar con Google**, habilita el proveedor Google en Firebase Authentication y añade el **Web Client ID** (el de tipo `Web client`, no el de Android):
+
+```properties
+onda.google.webClientId=123456789-abcdef.apps.googleusercontent.com
+```
+
+O la variable `ONDA_GOOGLE_WEB_CLIENT_ID`. Sin él, el botón aparece desactivado y la app indica qué falta configurar. Spotify y YouTube requieren sus propias credenciales OAuth y por ahora se muestran como "Próximamente".
 
 ---
 
@@ -122,6 +131,6 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ## Estado
 
-- ✅ Compilan debug y release de v1.1.2 (biblioteca con carátulas, menú de canción y QR + código).
+- ✅ Compilan debug y release de v1.1.3 (auto-siguiente, DJ contextual, foco de audio, Google, historial y carátulas en colecciones).
 - ✅ Release firmada y generada por GitHub Actions.
 - ⏳ Pruebas en dispositivo físico: streams reales, notificación en segundo plano y permiso de instalación.

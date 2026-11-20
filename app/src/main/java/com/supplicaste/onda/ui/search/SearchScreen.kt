@@ -114,21 +114,27 @@ fun SearchScreen(
             modifier = Modifier.weight(1f).padding(top = 10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (state.results.isEmpty()) {
-                if (recents.isNotEmpty()) {
-                    item { SectionLabel("Búsquedas recientes") }
-                    item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            recents.take(6).forEach { recent ->
-                                AssistChip(
-                                    onClick = { query = recent; vm.search(recent) },
-                                    label = { Text(recent, maxLines = 1) }
-                                )
-                            }
+            if (recents.isNotEmpty()) {
+                item { SectionLabel("Búsquedas recientes") }
+                items(recents, key = { it }) { recent ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AssistChip(
+                            onClick = { query = recent; vm.search(recent) },
+                            label = { Text(recent, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { vm.deleteSearch(recent) }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Borrar búsqueda")
                         }
                     }
-                    item { TextButton(onClick = { vm.clearSearches() }) { Text("Borrar historial") } }
                 }
+                item { TextButton(onClick = { vm.clearSearches() }) { Text("Borrar historial") } }
+            }
+
+            if (state.results.isEmpty()) {
                 item {
                     Text(
                         "Busca una canción, un artista o un grupo. Toca un resultado para reproducirlo.",

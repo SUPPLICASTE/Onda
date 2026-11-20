@@ -22,12 +22,13 @@ android {
         applicationId = "com.supplicaste.onda"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.1.2"
+        versionCode = 7
+        versionName = "1.1.3"
 
         buildConfigField("String", "FIREBASE_API_KEY", "\"${secret("onda.firebase.apiKey", "ONDA_FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${secret("onda.firebase.projectId", "ONDA_FIREBASE_PROJECT_ID")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${secret("onda.firebase.appId", "ONDA_FIREBASE_APP_ID")}\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${secret("onda.google.webClientId", "ONDA_GOOGLE_WEB_CLIENT_ID")}\"")
         buildConfigField("String", "UPDATER_REPO", "\"SUPPLICASTE/Onda\"")
     }
 
@@ -108,6 +109,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     implementation("com.google.firebase:firebase-auth-ktx:22.3.1")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 

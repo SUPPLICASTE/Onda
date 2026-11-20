@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
@@ -52,7 +53,7 @@ fun CollectionDialog(
             Column {
                 Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = {
-                        songs.firstOrNull()?.let { vm.play(it, songs) }
+                        if (isLiked) vm.playAllLiked() else songs.firstOrNull()?.let { vm.play(it, songs) }
                     }, enabled = songs.isNotEmpty()) { Text("Reproducir todo") }
 
                     TextButton(onClick = {
@@ -119,7 +120,17 @@ private fun SongLine(
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
     ) {
         IconButton(onClick = onPlay) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = "Reproducir")
+            androidx.compose.foundation.layout.Box {
+                com.supplicaste.onda.ui.components.Artwork(song.artwork, 44.dp)
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Reproducir",
+                    tint = androidx.compose.ui.graphics.Color.White,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(androidx.compose.ui.Alignment.Center)
+                )
+            }
         }
         Column(Modifier.weight(1f)) {
             Text(
@@ -129,7 +140,7 @@ private fun SongLine(
                 maxLines = 1
             )
             Text(
-                song.artist,
+                song.artist + if (song.durationSec > 0) " · ${formatDuration(song.durationSec)}" else "",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
@@ -146,4 +157,10 @@ private fun SongLine(
             Icon(Icons.Filled.Delete, contentDescription = "Quitar")
         }
     }
+}
+
+private fun formatDuration(seconds: Long): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "$m:${s.toString().padStart(2, '0')}"
 }

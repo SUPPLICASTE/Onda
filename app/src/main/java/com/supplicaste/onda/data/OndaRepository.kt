@@ -130,6 +130,8 @@ class OndaRepository(private val dao: OndaDao) {
 
     suspend fun clearSearches() = withContext(Dispatchers.IO) { dao.clearSearches() }
 
+    suspend fun deleteSearch(query: String) = withContext(Dispatchers.IO) { dao.deleteSearch(query) }
+
     suspend fun resolveStream(song: Song): String? = withContext(Dispatchers.IO) {
         streamCache[song.sourceUrl]?.let { return@withContext it }
         ensureNewPipe()
@@ -214,23 +216,48 @@ class OndaRepository(private val dao: OndaDao) {
         dao.insertHistory(HistoryEntity(songId = song.id))
     }
 
-    suspend fun suggest(candidates: List<Song>): Song? = withContext(Dispatchers.IO) {
-        val pool = (candidates + dao.allSongs().map { it.toSong() }).distinctBy { it.id }
+    suspend fun suggest(candidates: List<Song>, current: Song? = null): Song? = withContext(Dispatchers.IO) {
+        val all = dao.allSongs().map { it.toSong() }
+        val pool = (candidates + all).distinctBy { it.id }
+            .filter { it.id != current?.id }
         if (pool.isEmpty()) return@withContext null
 
         val liked = dao.likedSongsOnce().map { it.id }.toSet()
+        val collections = dao.collectionSongIds().toSet()
         val history = dao.recentHistory()
         val playsById = history.groupingBy { it.songId }.eachCount()
-        val artistById = dao.allSongs().associateBy { it.id }
+        val artistById = all.associateBy { it.id }
         val artistPlays = history.mapNotNull { artistById[it.songId]?.artist }
             .groupingBy { it }.eachCount()
 
+        // Contexto de la canción actual: artista y título para buscar canciones afines.
+        val currentArtist = current?.artist.orBlankLower()
+        val relatedTitles = if (currentArtist.isNotBlank()) {
+            try {
+                ensureNewPipe()
+                ServiceList.YouTube.getSearchExtractor(current!!.artist)
+                    .apply { fetchPage() }
+                    .initialPage.items
+                    .filterIsInstance<StreamInfoItem>()
+                    .take(12)
+                    .map { it.name.orBlankLower() }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else emptyList()
+
         pool.maxByOrNull { song ->
-            (if (song.id in liked) 3 else 0) +
+            val title = song.title.orBlankLower()
+            (if (current != null && song.artist.orBlankLower() == currentArtist) 5 else 0) +
+                (if (song.id in liked) 3 else 0) +
+                (if (song.id in collections) 2 else 0) +
                 (playsById[song.id] ?: 0) * 2 +
-                (artistPlays[song.artist] ?: 0)
+                (artistPlays[song.artist] ?: 0) +
+                (if (relatedTitles.any { it.contains(title) || title.contains(it) }) 2 else 0)
         }
     }
+
+    private fun String?.orBlankLower(): String = this?.trim()?.lowercase().orEmpty()
 
     suspend fun exportList(name: String, songs: List<Song>): String = withContext(Dispatchers.IO) {
         buildString {

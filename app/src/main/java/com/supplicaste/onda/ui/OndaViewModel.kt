@@ -1,6 +1,7 @@
 package com.supplicaste.onda.ui
 
 import android.app.Application
+import android.content.Intent
 import android.graphics.Bitmap
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
@@ -53,6 +54,7 @@ data class OndaUiState(
     val stats: OndaStats = OndaStats(0, 0, 0, 0),
     val qr: Bitmap? = null,
     val shareCode: String? = null,
+    val googleAvailable: Boolean = false,
     val updateAvailable: String? = null
 )
 
@@ -63,6 +65,7 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     private val repository = OndaRepository(database.dao())
     private val auth = AuthManager(app)
     private val prefs = app.getSharedPreferences("onda_prefs", Application.MODE_PRIVATE)
+    private var playerListener: Player.Listener? = null
 
     private val _state = MutableStateFlow(
         OndaUiState(
@@ -79,7 +82,12 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     val recentSearches = repository.recentSearches
 
     init {
-        OndaPlayer.connect(getApplication()) { syncPlayer() }
+        OndaPlayer.connect(getApplication()) {
+            attachPlayerListener()
+            syncPlayer()
+        }
+
+        _state.value = _state.value.copy(googleAvailable = auth.googleAvailable)
 
         viewModelScope.launch {
             repository.likedIds.collect { ids -> _state.value = _state.value.copy(likedIds = ids.toSet()) }
@@ -115,9 +123,59 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    /** Escucha el fin de pista para encadenar la siguiente canción automáticamente. */
+    private fun attachPlayerListener() {
+        val controller = OndaPlayer.get() ?: return
+        playerListener?.let { controller.removeListener(it) }
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) onTrackEnded()
+                syncPlayer()
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) = syncPlayer()
+        }
+        playerListener = listener
+        controller.addListener(listener)
+    }
+
+    private fun onTrackEnded() = viewModelScope.launch {
+        val state = _state.value
+        when (state.repeatMode) {
+            Player.REPEAT_MODE_ONE -> {
+                OndaPlayer.get()?.let { it.seekTo(0); it.playWhenReady = true }
+                return@launch
+            }
+            Player.REPEAT_MODE_ALL -> {
+                if (state.queue.isNotEmpty()) {
+                    playAt(if (state.queueIndex + 1 < state.queue.size) state.queueIndex + 1 else 0)
+                    return@launch
+                }
+            }
+        }
+        if (state.queueIndex + 1 < state.queue.size) {
+            playAt(state.queueIndex + 1)
+        } else if (state.djEnabled) {
+            djNext()
+        } else {
+            _state.value = _state.value.copy(playing = false)
+        }
+    }
+
     fun songsOfAlbum(albumId: Long) = repository.songsInAlbum(albumId)
 
     fun songsOfPlaylist(playlistId: Long) = repository.songsOfPlaylist(playlistId)
+
+    /** Reproduce TODAS las canciones de Me gusta desde la primera. */
+    fun playAllLiked() = viewModelScope.launch {
+        val songs = repository.songsOfPlaylistOnce(LIKED_PLAYLIST_ID).map { it.toSong() }
+        if (songs.isEmpty()) {
+            _state.value = _state.value.copy(message = "Aún no tienes canciones en Me gusta")
+            return@launch
+        }
+        _state.value = _state.value.copy(queue = songs, queueIndex = 0)
+        playCurrent()
+    }
 
     // ---------- Cuenta ----------
 
@@ -138,6 +196,19 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
             loading = false,
             email = result.getOrNull(),
             message = result.fold({ "Sesión iniciada" }, { "Error: ${it.message}" })
+        )
+    }
+
+    /** Devuelve el Intent de Google Sign-In, o null si no hay credenciales configuradas. */
+    fun googleSignInIntent(): Intent? = auth.googleSignInIntent()
+
+    fun signInWithGoogleToken(token: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, message = "Iniciando sesión con Google…")
+        val result = auth.signInWithGoogle(token)
+        _state.value = _state.value.copy(
+            loading = false,
+            email = result.getOrNull(),
+            message = result.fold({ "Sesión iniciada con Google" }, { "Error: ${it.message}" })
         )
     }
 
@@ -183,6 +254,8 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearSearches() = viewModelScope.launch { repository.clearSearches() }
+
+    fun deleteSearch(query: String) = viewModelScope.launch { repository.deleteSearch(query) }
 
     // ---------- Reproducción ----------
 
@@ -318,15 +391,21 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- DJ ----------
 
     fun toggleDj() {
-        _state.value = _state.value.copy(djEnabled = !_state.value.djEnabled)
+        val enabled = !_state.value.djEnabled
+        _state.value = _state.value.copy(djEnabled = enabled)
+        if (enabled) djNext()
     }
 
     fun djNext() = viewModelScope.launch {
-        val next = repository.suggest(_state.value.queue + _state.value.results)
+        val state = _state.value
+        val next = repository.suggest(
+            candidates = state.queue + state.results,
+            current = state.currentSong
+        )
         if (next == null) {
             _state.value = _state.value.copy(message = "Escucha algunas canciones o marca Me gusta para activar el DJ")
         } else {
-            play(next, _state.value.queue + listOf(next))
+            play(next, state.queue + listOf(next))
         }
     }
 
@@ -439,6 +518,8 @@ class OndaViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        playerListener?.let { listener -> OndaPlayer.get()?.removeListener(listener) }
+        playerListener = null
         OndaPlayer.disconnect()
     }
 }
