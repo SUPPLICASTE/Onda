@@ -117,8 +117,35 @@ La interfaz se inspira en patrones habituales de reproductores de música, pero 
 
 ---
 
+## GitHub Actions
+
+`.github/workflows/android.yml` automatiza todos los pasos:
+
+1. Checkout + JDK 17 + Gradle 8.7.
+2. Decodifica el keystore desde el secreto `ONDA_KEYSTORE_BASE64`.
+3. `assembleDebug` y `assembleRelease` firmado.
+4. Verifica la firma con `apksigner`.
+5. Sube ambos APK como artefactos (`onda-debug`, `onda-release`).
+6. Si el push es un tag `v*`, crea el Release y adjunta el APK firmado.
+
+Se ejecuta en `push` a `main`, en tags `v*`, en `pull_request` y manualmente (`workflow_dispatch`). En los PR no se usa el keystore: solo se compila el debug.
+
+**Secrets configurados en el repo:** `ONDA_KEYSTORE_BASE64`, `ONDA_STORE_PASSWORD`, `ONDA_KEY_PASSWORD`, `ONDA_KEY_ALIAS`. Opcionales para Firebase: `ONDA_FIREBASE_API_KEY`, `ONDA_FIREBASE_PROJECT_ID`, `ONDA_FIREBASE_APP_ID`.
+
+Para publicar una versión nueva:
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+El workflow compilará y creará el Release automáticamente.
+
+---
+
 ## Estado
 
 - ✅ Debug y release compilados correctamente (20/11/2026).
 - ✅ Release firmada y verificada con `apksigner`.
+- ✅ Workflow de GitHub Actions configurado con secretos de firma.
 - ⏳ Pruebas en dispositivo físico pendientes (búsqueda real, streams, permiso de instalación).

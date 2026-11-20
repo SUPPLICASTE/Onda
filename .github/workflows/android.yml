@@ -1,0 +1,87 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Decode release keystore
+        if: github.event_name != 'pull_request'
+        env:
+          ONDA_KEYSTORE_BASE64: ${{ secrets.ONDA_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ONDA_KEYSTORE_BASE64" ]; then
+            echo "::error::Falta el secreto ONDA_KEYSTORE_BASE64"
+            exit 1
+          fi
+          printf '%s' "$ONDA_KEYSTORE_BASE64" | base64 --decode > app/onda-release.keystore
+          ls -l app/onda-release.keystore
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build signed release APK
+        if: github.event_name != 'pull_request'
+        env:
+          ONDA_STORE_PASSWORD: ${{ secrets.ONDA_STORE_PASSWORD }}
+          ONDA_KEY_PASSWORD: ${{ secrets.ONDA_KEY_PASSWORD }}
+          ONDA_KEY_ALIAS: ${{ secrets.ONDA_KEY_ALIAS }}
+          ONDA_FIREBASE_API_KEY: ${{ secrets.ONDA_FIREBASE_API_KEY }}
+          ONDA_FIREBASE_PROJECT_ID: ${{ secrets.ONDA_FIREBASE_PROJECT_ID }}
+          ONDA_FIREBASE_APP_ID: ${{ secrets.ONDA_FIREBASE_APP_ID }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Verify release signature
+        if: github.event_name != 'pull_request'
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          echo "Usando $APKSIGNER"
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: onda-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload signed release APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: onda-release
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
